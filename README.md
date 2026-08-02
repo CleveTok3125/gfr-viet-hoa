@@ -180,6 +180,17 @@ It diffs the English sources (extracted from `data.i`) against the installed
 - `apply.py` is idempotent and never touches your save data; running it on an
   outdated build is safe (new strings simply stay English).
 
+## Known issues
+
+- **Name highlight colour drifts in dialogue.** The game applies a highlight
+  (e.g. for proper nouns such as `Zegagrande`) at the character index taken
+  from the original English text, onto whatever text is being displayed. A
+  Vietnamese line has a different length, so the colour lands on the wrong
+  part of the sentence (for example it can start mid-word). The colour range
+  is baked into the game engine — it is not stored in any patchable data table
+  — so this cannot be fixed from the text side. It is cosmetic only: the
+  wording is unaffected, and only some proper-noun highlights are misplaced.
+
 ## Disclaimer
 
 Fan-made localization. All game assets and trademarks belong to Cygames, Inc.
