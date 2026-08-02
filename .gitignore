@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.zip
+vietnam_backup/
+translations_new.json
+review.txt
+
+# binary lz4 (replaced by pure-Python src/lz4_block_pure.py)
+vendor/lz4/
+
+# pre-cleanup backup of game files and exported translations
+archive/

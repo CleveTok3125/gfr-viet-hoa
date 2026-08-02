@@ -1,0 +1,22 @@
+{
+ "meta": {
+  "game": "Granblue Fantasy: Relink",
+  "format": 1,
+  "note": "Rule-based transforms applied on top of exact-match dict."
+ },
+ "stat_map": {
+  "ATK +{0}%": "Tấn Công +{0}%",
+  "DEF +{0}%": "Phòng Thủ +{0}%",
+  "DMG Cap +{0}%": "Giới Hạn Sát Thương +{0}%",
+  "Max HP +{0}": "HP Tối Đa +{0}",
+  "Cooldown -{0}%": "Thời Gian Hồi Chiêu -{0}%",
+  "Skill ATK +{0}%": "ATK Kỹ Năng +{0}%",
+  "Skill DMG +{0}%": "Sát Thương Kỹ Năng +{0}%"
+ },
+ "skillboard_node_transform": {
+  "files": [
+   "text_skillboard.msg"
+  ],
+  "description": "For any row matching 'Name:\\n<stat>', keep the skill name and translate the stat line."
+ }
+}
