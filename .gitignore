@@ -10,3 +10,6 @@ vendor/lz4/
 
 # pre-cleanup backup of game files and exported translations
 archive/
+
+# translation normalize backups
+*.bak
