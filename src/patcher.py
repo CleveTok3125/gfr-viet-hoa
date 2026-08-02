@@ -1,10 +1,96 @@
-"""Core patch logic shared by apply.py (end-user) and build_patch.py (release)."""
+"""Core patch logic shared by apply.py (end-user) and build_patch.py (release).
+
+Rows are matched to their English reference by row index / id_hash, not by
+the on-disk display string. This is the correct update path: after a
+translation edit (or a game update) the ko/ tables may already hold
+Vietnamese (or a different language) text, so matching the English key
+against the current string cannot work.
+"""
 import os
 import shutil
 
+import msgpack
+
 import datai
 from common import table_rel
+from extract import extract
 from patch_engine import PatchEngine, read_msg
+
+
+def en_path(file):
+    return table_rel(file).replace("/ko", "/en")[len("data/"):] + "/" + file
+
+
+def patch_file_indexed(game, index, file, engine, index_bytes):
+    """Apply translations to one .msg table, matching each row to its
+    English reference. Returns the same dict shape as PatchEngine.patch_file.
+
+    Falls back to exact-string matching if the English reference cannot be
+    extracted (e.g. the reference table is absent).
+    """
+    path = os.path.join(game, table_rel(file), file)
+    data = read_msg(path)
+    disk_rows = data["rows_"]
+
+    raw_en = extract(game, en_path(file), index_bytes)
+    if raw_en is None:
+        return engine.patch_file(file, path)
+
+    en_obj = msgpack.unpackb(raw_en, raw=False)
+    en_rows = en_obj["rows_"]
+
+    id_map = None
+    if len(disk_rows) != len(en_rows):
+        id_map = {}
+        for i, r in enumerate(en_rows):
+            c = r["column_"]
+            key = (c.get("id_hash_", ""), c.get("subid_hash_", ""))
+            id_map.setdefault(key, i)
+
+    tbl = engine.translations.get(file)
+    do_node = (engine._node_re is not None and
+               file in (engine.rules.get("skillboard_node_transform") or {}).get("files", []))
+
+    patched = already = 0
+    unmatched = []
+    for idx, row in enumerate(disk_rows):
+        if id_map is not None:
+            c = row["column_"]
+            key = (c.get("id_hash_", ""), c.get("subid_hash_", ""))
+            src = id_map.get(key)
+            if src is None:
+                continue
+        else:
+            src = idx
+        en_txt = en_rows[src]["column_"]["text_"]
+
+        new = None
+        if tbl and en_txt in tbl:
+            new = tbl[en_txt]
+        elif do_node:
+            m = engine._node_re.match(en_txt)
+            if m:
+                new = f"{m.group(1)}:\n{engine.stat_map[m.group(2)]}"
+
+        if new is None:
+            unmatched.append(en_txt)
+        elif new == row["column_"]["text_"]:
+            already += 1
+        else:
+            row["column_"]["text_"] = new
+            patched += 1
+
+    if patched:
+        from patch_engine import write_msg
+        write_msg(path, data)
+
+    return {
+        "file": file,
+        "path": path,
+        "patched": patched,
+        "already": already,
+        "unmatched": unmatched,
+    }
 
 
 def patch_install(game, index, engine, filelist,
@@ -36,12 +122,15 @@ def patch_install(game, index, engine, filelist,
                                 dirs_exist_ok=True)
         log(f"Backup -> {backup_dir}")
 
+    with open(index, "rb") as f:
+        index_bytes = f.read()
+
     for file in engine.iter_files():
         path = os.path.join(game, table_rel(file), file)
         if not os.path.isfile(path):
             results["missing_files"].append(file)
             continue
-        r = engine.patch_file(file, path)
+        r = patch_file_indexed(game, index, file, engine, index_bytes)
         results["patched"] += r["patched"]
         results["already"] += r["already"]
         results["unmatched"] += len(r["unmatched"])

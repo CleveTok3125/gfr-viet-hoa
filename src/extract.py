@@ -30,10 +30,17 @@ def find_archive_index(root, target):
     return None
 
 
-def extract(game_dir, path):
-    """Return file bytes for `path` (internal, no 'data/' prefix), or None."""
-    index_path = os.path.join(game_dir, "data.i")
-    buf = open(index_path, "rb").read()
+def extract(game_dir, path, index_bytes=None):
+    """Return file bytes for `path` (internal, no 'data/' prefix), or None.
+
+    Pass `index_bytes` (the raw bytes of data.i) to avoid re-reading the
+    index file on every call.
+    """
+    if index_bytes is None:
+        index_path = os.path.join(game_dir, "data.i")
+        buf = open(index_path, "rb").read()
+    else:
+        buf = index_bytes
     root = IndexFile.IndexFile.GetRootAs(buf, 0)
 
     target = xxh64(path)
