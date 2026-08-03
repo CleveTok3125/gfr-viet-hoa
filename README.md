@@ -13,6 +13,11 @@ counterparts, so no English voice/story lock is lost.
   are msgpack tables (`rows_`/`column_`). The patch rewrites `text_` values by
   exact-match against the table, then applies node-transform rules from
   `rules.json` (e.g. skillboard stat names).
+- `*_tag.msg` files (one per text/scenario table, `ko/`) carry the dialogue
+  highlight ranges used for name colours and voice/text sync. The stored
+  `start_`/`end_` offsets are character indices **into the English string**,
+  so every tag is remapped to the matching position in the Vietnamese text
+  (`src/remap_tags.py`).
 - `data.i` is the FlatBuffers index of the archive. The patch:
   - redirects every `ui/.../kor/...` entry to its `eng` counterpart
     (`FileToChunkIndexers` structs) so the game loads English UI assets, and
@@ -34,6 +39,7 @@ rebuild_translations.py  regenerate the table from a patched install
 update_filelist.py     fetch the latest file list from GBFRDataTools
 vendor/                bundled pure-Python deps (msgpack, flatbuffers)
 src/                   engine, data.i handling, extraction helpers
+src/remap_tags.py      remap *_tag.msg highlight offsets to the Vietnamese text
 ```
 
 No external pip installs are needed; the bundled `vendor/` is used automatically.
@@ -60,10 +66,16 @@ py -3 -m gfrpatch
 
 The tool asks you to type your game folder if `--game` is not given (it also
 prints any install it auto-detected, as a hint). It backs up `data.i` and the
-`ko/` tables to `<game>/vietnam_backup/`, patches everything, verifies every
-table still unpacks, and is **idempotent** (re-running reports nothing to
-patch). Close the game before patching (running game files are locked), then
-launch the game with language = Korean.
+`ko/` text+scenario tables to `<game>/vietnam_backup/`, patches everything,
+verifies every table still unpacks, and is **idempotent** (re-running reports
+nothing to patch). Close the game before patching (running game files are
+locked), then launch the game with language = Korean.
+
+The dialogue highlight ranges live in `*_tag.msg`. They are remapped to the
+Vietnamese text once, before a release is built, with
+`python3 -m src.remap_tags --all --game "<game>" --write` (this is how the
+published zip and the manifests are produced; a maintainer only re-runs it
+when the translation changes enough to shift offsets).
 
 Options: `--backup-dir <dir>`, `--no-ui`, `--no-fix-sizes`, `--skip-backup`.
 
@@ -77,7 +89,8 @@ intact. For best results, always update the game to the supported build.
 ### No-Python users: pre-patched release zip
 
 `build_patch.py` produces a zip containing `data.i` + the translated `ko/`
-tables with the game's exact relative layout:
+tables (text, scenario and their `*_tag.msg` files) with the game's exact
+relative layout:
 
 ```bash
 python3 build_patch.py --game "/path/to/install" --out gbfr_vietnam.zip
@@ -154,7 +167,14 @@ else is installed via pip.
    Expect `Build check: WARNING` to disappear only after `build_fingerprint`
    matches the new build; if you rebuilt `translations.json` with
    `rebuild_translations.py`, the fingerprint is updated automatically.
-7. Ship it: commit, then
+7. Remap the dialogue highlight offsets to the new text and re-verify:
+   ```bash
+   python3 -m src.remap_tags --all --game "/path/to/new/install" --write
+   python3 verify.py --game "/path/to/new/install" --gen
+   ```
+   (Run after any translation change that shifts character offsets. Without
+   this, name highlights and voice/text sync would drift from the dialogue.)
+8. Ship it: commit, then
    ```bash
    python3 build_patch.py --game "/path/to/new/install" --out gbfr_vietnam.zip
    ```
@@ -182,14 +202,13 @@ It diffs the English sources (extracted from `data.i`) against the installed
 
 ## Known issues
 
-- **Name highlight colour drifts in dialogue.** The game applies a highlight
-  (e.g. for proper nouns such as `Zegagrande`) at the character index taken
-  from the original English text, onto whatever text is being displayed. A
-  Vietnamese line has a different length, so the colour lands on the wrong
-  part of the sentence (for example it can start mid-word). The colour range
-  is baked into the game engine — it is not stored in any patchable data table
-  — so this cannot be fixed from the text side. It is cosmetic only: the
-  wording is unaffected, and only some proper-noun highlights are misplaced.
+- **Residual highlight drift on heavily-translated terms.** Dialogue name
+  highlights are driven by `*_tag.msg` character offsets, which are remapped
+  to the Vietnamese text at patch time. For proper nouns that are kept
+  verbatim the highlight lands exactly; when a term is translated freely
+  (e.g. `perfect dodge` → `né tránh hoàn hảo`) the remap can only approximate
+  the span, so a highlight may start one or two words off. Cosmetic only —
+  the wording is unaffected.
 
 ## Disclaimer
 
