@@ -37,9 +37,11 @@ updater.py             diff the table against a newer game build
 verify.py              hash-check patched files vs release manifest
 rebuild_translations.py  regenerate the table from a patched install
 update_filelist.py     fetch the latest file list from GBFRDataTools
+tag_overrides.json     manual VN highlight ranges for hard-to-resolve tags
 vendor/                bundled pure-Python deps (msgpack, flatbuffers)
 src/                   engine, data.i handling, extraction helpers
 src/remap_tags.py      remap *_tag.msg highlight offsets to the Vietnamese text
+src/tag_review.py      interactive review of unresolved highlight ranges
 ```
 
 No external pip installs are needed; the bundled `vendor/` is used automatically.
@@ -76,6 +78,13 @@ Vietnamese text once, before a release is built, with
 `python3 -m src.remap_tags --all --game "<game>" --write` (this is how the
 published zip and the manifests are produced; a maintainer only re-runs it
 when the translation changes enough to shift offsets).
+
+Ranges that are translated freely (e.g. `perfect dodge` → `né tránh hoàn hảo`)
+cannot be located automatically. They are surfaced with
+`--report review.json`, and each one is resolved interactively with
+`python3 -m src.tag_review --game "<game>"`, which asks for the exact VN
+range and stores the answer in `tag_overrides.json`. `remap_tags.py` applies
+those overrides verbatim when `--overrides tag_overrides.json` is passed.
 
 Options: `--backup-dir <dir>`, `--no-ui`, `--no-fix-sizes`, `--skip-backup`.
 
@@ -169,11 +178,18 @@ else is installed via pip.
    `rebuild_translations.py`, the fingerprint is updated automatically.
 7. Remap the dialogue highlight offsets to the new text and re-verify:
    ```bash
-   python3 -m src.remap_tags --all --game "/path/to/new/install" --write
+   python3 -m src.remap_tags --all --game "/path/to/new/install" \
+       --report /tmp/tag_review.json
+   python3 -m src.tag_review --game "/path/to/new/install"
+   python3 -m src.remap_tags --all --game "/path/to/new/install" --write \
+       --overrides tag_overrides.json
    python3 verify.py --game "/path/to/new/install" --gen
    ```
-   (Run after any translation change that shifts character offsets. Without
-   this, name highlights and voice/text sync would drift from the dialogue.)
+   The first `remap_tags` pass reports every range it could not resolve
+   exactly; `tag_review` walks you through them and fills in
+   `tag_overrides.json`; the second `remap_tags` pass applies both the
+   automatic remap and the manual overrides. Without this, name highlights
+   and voice/text sync would drift from the dialogue.
 8. Ship it: commit, then
    ```bash
    python3 build_patch.py --game "/path/to/new/install" --out gbfr_vietnam.zip
