@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.5.2 - literal `<d>` marker fix (2026-08-03)
+
+- Fixed literal `<d>` markers rendering in dialogue/pop-up text. The tag
+  remapper only rewrote the `bolds_/colors_/words_/names_` ranges, leaving the
+  `dynamics_`/`formats_` positional markers at their English offsets, so after
+  translation the engine no longer recognized the `<d>` markup and printed it
+  verbatim.
+- `remap_tags.py` now recomputes `formats_`/`dynamics_` purely from the
+  Vietnamese text (`formats_` = expanded placeholder end; dtag 24/28/29 = `<d>`
+  positions; dtag 16/17 = color region; dtag 4/26 = `<d>` after placeholder),
+  including rows with no English equivalent.
+- New `remap_tags --fix-sizes` rewrites the declared `ExternalFileSize` of
+  every changed `*_tag.msg` in `data.i`. The game validates loose-file sizes
+  before loading them, and `apply.py` only fixed the translated `.msg` tables,
+  so rewritten tag tables were silently ignored — the actual cause of the
+  literal `<d>` markers.
+- Re-verified `verify.py` (135 files, 0 mismatches).
+
 ## v0.5.1 - factual fixes for DLC rows (2026-08-03)
 
 - `text_tutorial.msg`: fixed 90 rows that were scrambled after the Endless
