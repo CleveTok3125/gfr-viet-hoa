@@ -22,7 +22,9 @@ counterparts, so no English voice/story lock is lost.
   - redirects every `ui/.../kor/...` entry to its `eng` counterpart
     (`FileToChunkIndexers` structs) so the game loads English UI assets, and
   - rewrites the declared `ExternalFileSizes` for every patched loose table so
-    the size checksum stays consistent.
+    the size checksum stays consistent. This covers the translated `.msg`
+    tables during `apply.py` and the remapped `*_tag.msg` tables during
+    `remap_tags --fix-sizes`.
 
 ## Repository layout
 
@@ -40,7 +42,7 @@ update_filelist.py     fetch the latest file list from GBFRDataTools
 tag_overrides.json     manual VN highlight ranges for hard-to-resolve tags
 vendor/                bundled pure-Python deps (msgpack, flatbuffers)
 src/                   engine, data.i handling, extraction helpers
-src/remap_tags.py      remap *_tag.msg highlight offsets to the Vietnamese text
+src/remap_tags.py      remap *_tag.msg offsets to the VN text (--write --fix-sizes)
 src/tag_review.py      interactive review of unresolved highlight ranges
 ```
 
@@ -75,9 +77,17 @@ locked), then launch the game with language = Korean.
 
 The dialogue highlight ranges live in `*_tag.msg`. They are remapped to the
 Vietnamese text once, before a release is built, with
-`python3 -m src.remap_tags --all --game "<game>" --write` (this is how the
-published zip and the manifests are produced; a maintainer only re-runs it
-when the translation changes enough to shift offsets).
+`python3 -m src.remap_tags --all --game "<game>" --write --fix-sizes` (this is
+how the published zip and the manifests are produced; a maintainer only
+re-runs it when the translation changes enough to shift offsets).
+
+`--write` also recomputes the positional `dynamics_`/`formats_` markers
+(the `<d>`/placeholder offsets the engine uses to strip tag markup) purely
+from the translated text, including rows that have no English equivalent.
+`--fix-sizes` is required: the game validates the declared `ExternalFileSize`
+of every loose `_tag.msg` against disk, and `apply.py` only fixes the sizes
+of the translated `.msg` tables. Without it the engine ignores a rewritten
+tag table and renders literal `<d>` markers.
 
 Ranges that are translated freely (e.g. `perfect dodge` → `né tránh hoàn hảo`)
 cannot be located automatically. They are surfaced with
@@ -182,14 +192,17 @@ else is installed via pip.
        --report /tmp/tag_review.json
    python3 -m src.tag_review --game "/path/to/new/install"
    python3 -m src.remap_tags --all --game "/path/to/new/install" --write \
-       --overrides tag_overrides.json
+       --overrides tag_overrides.json --fix-sizes
    python3 verify.py --game "/path/to/new/install" --gen
    ```
    The first `remap_tags` pass reports every range it could not resolve
    exactly; `tag_review` walks you through them and fills in
    `tag_overrides.json`; the second `remap_tags` pass applies both the
-   automatic remap and the manual overrides. Without this, name highlights
-   and voice/text sync would drift from the dialogue.
+   automatic remap and the manual overrides, and `--fix-sizes` rewrites the
+   declared `ExternalFileSize` of every changed tag file in `data.i` (the
+   game otherwise rejects tag tables whose size no longer matches). Without
+   this, name highlights and voice/text sync would drift from the dialogue,
+   and the engine would render literal `<d>` markers.
 8. Ship it: commit, then
    ```bash
    python3 build_patch.py --game "/path/to/new/install" --out gbfr_vietnam.zip
@@ -218,6 +231,23 @@ It diffs the English sources (extracted from `data.i`) against the installed
 
 ## Known issues
 
+- **Some pop-ups, waiting/loading screens lose their text.** Certain UI
+  elements (pop-up prompts, wait dialogs, loading screens) can end up blank or
+  missing text after the translation. This is under investigation; the cause is
+  likely an offset/format mismatch specific to those table rows, similar to the
+  `<d>` marker issue fixed for dialogue.
+- **Some sections are not fully translated yet.** A number of strings are still
+  untranslated (English or Korean text remains). These are tracked in
+  `translations.json` and get filled in over time; run `updater.py` after a game
+  update to surface the newest untranslated rows.
+- **Button-icon placeholders can drift or fail to render.** When a string
+  contains a button-icon token (e.g. a controller/gamepad key glyph), the icon
+  may appear in the wrong position or not render at all. The tag remap handles
+  `<d>` and `{placeholder}` markers, but icon tokens need a dedicated pass.
+- **Voice sync may drift in some dialogues.** Because the translated text is
+  often shorter or longer than the original, lip-sync/voice timing can be off in
+  a few scenes. This is inherent to text length changes and is cosmetic — the
+  dialogue wording itself is unaffected.
 - **Residual highlight drift on heavily-translated terms.** Dialogue name
   highlights are driven by `*_tag.msg` character offsets, which are remapped
   to the Vietnamese text at patch time. For proper nouns that are kept
