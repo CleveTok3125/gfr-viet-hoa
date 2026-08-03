@@ -90,35 +90,111 @@ def find_in_vn(sub, vn_text):
     return None
 
 
+def best_match(sub, vn_text):
+    """Find the closest (start, end) of `sub` inside vn_text.
+
+    Uses difflib matching blocks so it survives light rewording (word order,
+    inline punctuation) that a plain substring search would miss. Returns
+    (start, end, ratio) or None if nothing remotely close exists.
+    """
+    if not sub or not vn_text:
+        return None
+    sm = difflib.SequenceMatcher(None, sub, vn_text, autojunk=False)
+    best = None
+    for b in sm.get_matching_blocks():
+        if b.size == 0:
+            continue
+        ratio = b.size / len(sub)
+        if best is None or b.size > best[2] or (
+                b.size == best[2] and ratio > best[3]):
+            best = (b.b, b.b + b.size, b.size, ratio)
+    if best is None:
+        return None
+    start, end, size, ratio = best
+    return start, end, ratio
+
+
+def _word_tokens(text):
+    """Split a highlighted span into significant word tokens."""
+    return [w for w in WORD_RE.findall(text) if len(w) >= 3]
+
+
 def remap_range(en_text, vn_text, mapping, start, end):
-    """Given EN [start,end), return new (start,end) for VN or None."""
+    """Given EN [start,end), return (new_start, new_end, method) for VN.
+
+    method is one of:
+      'marker'    zero-length marker, position estimated proportionally
+      'exact'     whole span aligned by the char map
+      'found'     substring located literally in VN
+      'match'     closest difflib block found in VN (ratio-based)
+      'interp'    line/anchor interpolation fallback
+      'unresolved' nothing usable found -> needs a manual override
+    """
     length = end - start
     if length == 0:
         # zero-length marker (e.g. player-name insertion point):
         # keep proportional position
         if not en_text:
-            return None
+            return None, None, 'unresolved'
         est = round(start * len(vn_text) / len(en_text))
         est = max(0, min(len(vn_text), est))
-        return est, est
+        return est, est, 'marker'
     if length < 0:
-        return None
+        return None, None, 'unresolved'
     # 1) whole span covered by char map (exact alignment)
     keys = [start + k for k in range(length)]
     if all(k in mapping for k in keys):
         vals = [mapping[k] for k in keys]
         if vals == sorted(vals) and (vals[-1] - vals[0] + 1) == len(vals):
-            return vals[0], vals[-1] + 1
+            return vals[0], vals[-1] + 1, 'exact'
     # 2) locate the exact substring in VN
     sub = en_text[start:end]
     found = find_in_vn(sub, vn_text)
     if found:
-        return found
+        return found[0], found[1], 'found'
+    # 2.2) case-insensitive literal match (proper nouns kept verbatim)
+    lc_vn = vn_text.lower()
+    m2 = best_match(sub.lower(), lc_vn)
+    if m2 and m2[2] >= 0.9 and len(sub) >= 4:
+        s, e, ratio = m2
+        ns, ne = _snap_words(vn_text, s, e)
+        return ns, ne, 'match'
+    # 2.3) re-find via significant word tokens (proper nouns inside the span)
+    toks = _word_tokens(sub)
+    if toks:
+        vn_lower = vn_text.lower()
+        hits = []
+        for tok in toks:
+            idx = vn_lower.find(tok.lower())
+            if idx != -1:
+                hits.append((idx, tok))
+        if hits:
+            hits.sort()
+            best = None
+            for i, (idx, tok) in enumerate(hits):
+                span_s = idx
+                span_e = idx + len(tok)
+                j = i
+                while j + 1 < len(hits) and hits[j + 1][0] - span_e < 12:
+                    j += 1
+                    span_e = max(span_e, hits[j][0] + len(hits[j][1]))
+                if best is None or (span_e - span_s) > (best[1] - best[0]):
+                    best = (span_s, span_e)
+            ns, ne = _snap_words(vn_text, *best)
+            return ns, ne, 'match'
+    # 2.5) locate the closest block of the span in VN
+    matched = best_match(sub, vn_text)
+    if matched and matched[2] >= 0.5:
+        s, e, ratio = matched
+        ns, ne = _snap_words(vn_text, s, e)
+        if ratio >= 0.8:
+            return ns, ne, 'match'
+        return ns, ne, 'interp'
     # 3) interpolate using nearest aligned anchors around the span
     est = _interpolate(en_text, vn_text, mapping, start, end)
     if est:
-        return _snap_words(vn_text, *est)
-    return None
+        return _snap_words(vn_text, *est) + ('interp',)
+    return None, None, 'unresolved'
 
 
 def _snap_words(vn_text, s, e):
@@ -246,14 +322,22 @@ def _line_of(text, pos):
 
 
 def remap_tag_file(game_dir, rel_text, rel_tag, tag_blob, en_text, vn_text,
-                   en_tag_blob, dry_run, verbose):
+                   en_tag_blob, dry_run, verbose, overrides=None, report=None):
     """Rewrite ranges in tag_blob using EN tag indices as the source of truth.
 
     The ko tag on disk and the EN tag in the archive share the same ranges
     (indices are computed against the EN text). We therefore read ranges
     from the immutable EN tag, remap them to the VN text, and write back to
     the ko file, preserving the ko file's string-valued format.
-    Returns (changed, rows, unfound).
+
+    `overrides` is a dict {file_base: {id: {tag_key: {item_idx: [start, end]}}}}
+    giving exact VN character ranges supplied by a human; any range with an
+    override is used verbatim and reported as 'manual'.
+
+    `report`, if given, is a list that receives one dict per range that was
+    NOT resolved exactly (everything needing a human check).
+
+    Returns (changed, rows, unfound, skipped, manual).
     """
     vn_by_id = build_id_text(vn_text)
 
@@ -266,10 +350,12 @@ def remap_tag_file(game_dir, rel_text, rel_tag, tag_blob, en_text, vn_text,
 
     en_by_id = norm(en_tag_blob) if en_tag_blob else {}
 
+    file_over = (overrides or {}).get(rel_tag.split("/")[-1][: -len("_tag.msg")], {})
     changed = 0
     rows = 0
     unfound = 0
     skipped = 0
+    manual = 0
     for entry in tag_blob["Tag"]["tags_"]:
         el = entry["Element"]
         rid = el.get("id_", "")
@@ -287,6 +373,7 @@ def remap_tag_file(game_dir, rel_text, rel_tag, tag_blob, en_text, vn_text,
             skipped += 1
             continue
         m = char_map(en_txt, vn_txt)
+        id_over = file_over.get(rid, {})
         for key in TAG_KEYS:
             items = el.get(key)
             if not items:
@@ -305,20 +392,37 @@ def remap_tag_file(game_dir, rel_text, rel_tag, tag_blob, en_text, vn_text,
                     continue
                 rows += 1
                 sub_en = en_txt[start:end]
-                new = remap_range(en_txt, vn_txt, m, start, end)
-                if new is None:
-                    unfound += 1
-                    if verbose:
-                        print(f"  UNFOUND {rid} {key} [{start}:{end}] {sub_en!r}")
-                    continue
-                ns, ne = new
+                override = id_over.get(key, {}).get(str(n))
+                if override:
+                    ns, ne = int(override[0]), int(override[1])
+                    method = "manual"
+                else:
+                    new = remap_range(en_txt, vn_txt, m, start, end)
+                    if new is None or new[0] is None:
+                        unfound += 1
+                        if verbose:
+                            print(f"  UNFOUND {rid} {key} [{start}:{end}] {sub_en!r}")
+                        if report is not None:
+                            report.append(dict(file=rel_tag.split("/")[-1], id=rid,
+                                               key=key, item=n, en_start=start, en_end=end,
+                                               en_text=sub_en, vn_text=vn_txt, en_full=en_txt,
+                                               method="unresolved"))
+                        continue
+                    ns, ne, method = new
+                    if report is not None and method not in ("exact", "found", "marker", "match"):
+                        report.append(dict(file=rel_tag.split("/")[-1], id=rid,
+                                           key=key, item=n, en_start=start, en_end=end,
+                                           en_text=sub_en, vn_text=vn_txt, en_full=en_txt,
+                                           vn_start=ns, vn_end=ne, method=method))
+                if method == "manual":
+                    manual += 1
                 if ns != start or ne != end:
                     elem["start_"] = str(ns)
                     elem["end_"] = str(ne)
                     changed += 1
                     if verbose:
                         print(f"  {rid} {key} [{start}:{end}] -> [{ns}:{ne}] {sub_en!r}")
-    return changed, rows, unfound, skipped
+    return changed, rows, unfound, skipped, manual
 
 
 def main():
@@ -328,12 +432,25 @@ def main():
     ap.add_argument("--all", action="store_true",
                     help="process every *_tag.msg in text/ko and scenario/ko")
     ap.add_argument("--write", action="store_true", help="write changes back")
+    ap.add_argument("--overrides", default=None,
+                    help="JSON file of manual VN ranges (tag_overrides.json)")
+    ap.add_argument("--report", default=None,
+                    help="write a JSON report of ranges needing review")
     ap.add_argument("-v", "--verbose", action="store_true")
     args = ap.parse_args()
 
     game = args.game
     if not (args.file or args.all):
         ap.error("provide --file or --all")
+
+    overrides = {}
+    if args.overrides:
+        import json
+        with open(args.overrides, "r", encoding="utf-8") as fh:
+            overrides = json.load(fh)
+        print(f"loaded {len(overrides)} override file(s) from {args.overrides}")
+
+    report = [] if args.report else None
 
     if args.file:
         bases = [args.file]
@@ -348,6 +465,7 @@ def main():
         bases = sorted(set(bases))
 
     total_changed = total_rows = total_unfound = total_skipped = 0
+    total_manual = 0
     for base in bases:
         if base.startswith("text_scenario"):
             dir_rel = SCENARIO_KO
@@ -375,13 +493,14 @@ def main():
             continue
         vn_text = msgpack.unpackb(open(vn_path, "rb").read(), raw=False)
 
-        changed, rows, unfound, skipped = remap_tag_file(
+        changed, rows, unfound, skipped, manual = remap_tag_file(
             game, dir_rel, ko_tag_path, tag_blob, en_text, vn_text,
-            en_tag_blob, args.write, args.verbose)
+            en_tag_blob, args.write, args.verbose, overrides, report)
         total_changed += changed
         total_rows += rows
         total_unfound += unfound
         total_skipped += skipped
+        total_manual += manual
 
         if args.write and changed:
             save_tag(ko_tag_path, tag_blob)
@@ -389,7 +508,14 @@ def main():
             print(f"{base}: ranges={rows} changed={changed} unfound={unfound}"
                   + (" written" if (args.write and changed) else ""))
 
-    print(f"\nTOTAL: files={len(bases)} ranges={total_rows} changed={total_changed} unfound={total_unfound} skipped={total_skipped}")
+    if args.report:
+        import json
+        with open(args.report, "w", encoding="utf-8") as fh:
+            json.dump(report, fh, ensure_ascii=False, indent=1)
+        print(f"wrote {len(report)} review entries to {args.report}")
+
+    print(f"\nTOTAL: files={len(bases)} ranges={total_rows} changed={total_changed}"
+          + f" unfound={total_unfound} skipped={total_skipped} manual={total_manual}")
     return 0
 
 
