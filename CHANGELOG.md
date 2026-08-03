@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.5.1 - factual fixes for DLC rows (2026-08-03)
+
+- `text_tutorial.msg`: fixed 90 rows that were scrambled after the Endless
+  Ragnarok DLC (content landed on the wrong row, including one row outside the
+  DLC block) and added 18 fresh translations for newly-added rows.
+- `text_badge.msg`: fixed 71 factual errors — "3 Skybound Arts" read as "30",
+  "1 time"/"2 times" defeat counts read as "3"/"2 lần", "10 min" read as "5",
+  "3 loadout sets" read as "3", and several DLC badges swapped Tweyen/
+  Sandalphon/Seofon names; also dropped a stray "thuyền" prefix.
+- `text.msg`: fixed Narmaya's parry skill description where the character name
+  had been mistranslated as Yodarha.
+- Rebuilt `translations.json`, re-ran tag remapping and `verify.py` (135 files,
+  0 mismatches) after every table change.
+
 ## v0.5.0 - translation quality pass & portable tool (2026-08-03)
 
 - Fixed ambiguous stats: `ATK↑`/`ATK↓` and `DEF↑`/`DEF↓` were both rendered
