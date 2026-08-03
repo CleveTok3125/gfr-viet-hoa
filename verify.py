@@ -32,6 +32,7 @@ def patched_files():
     files = ["data.i"]
     for f in load_translations()["translations"]:
         files.append(os.path.join(table_rel(f), f))
+        files.append(os.path.join(table_rel(f), f[:-len(".msg")] + "_tag.msg"))
     return files
 
 
