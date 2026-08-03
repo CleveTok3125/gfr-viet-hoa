@@ -28,8 +28,140 @@ from common import TEXT_KO, SCENARIO_KO  # noqa: E402
 
 WHITESPACE_RE = re.compile(r"\s+")
 WORD_RE = re.compile(r"\S+")
+PLACEHOLDER_RE = re.compile(r"\{[^}]*\}")
 
 TAG_KEYS = ("bolds_", "colors_", "words_", "names_")
+
+
+def _expanded_width(tok):
+    """Expanded string width of a placeholder token in tag space."""
+    return 7 if tok == "{:s}" else 6
+
+
+def _scan_expanded(text):
+    """Scan expanded-space positions of <d> markers and placeholders.
+
+    Returns (d_exp, d_raw, ph_start, ph_end, ph_raw_end):
+      d_exp       expanded start of each <d>
+      d_raw       raw start of each <d>
+      ph_start    {placeholder idx: expanded start}
+      ph_end      {placeholder idx: expanded end}
+      ph_raw_end  {placeholder idx: raw end}
+    """
+    d_exp = []
+    d_raw = []
+    ph_start = {}
+    ph_end = {}
+    ph_raw_end = {}
+    i = 0
+    ex = 0
+    pidx = 0
+    while i < len(text):
+        if text.startswith("<d>", i):
+            d_exp.append(ex)
+            d_raw.append(i)
+            ex += 3
+            i += 3
+        elif text[i] == "{":
+            m = PLACEHOLDER_RE.match(text, i)
+            w = _expanded_width(m.group())
+            ph_start[pidx] = ex
+            ph_end[pidx] = ex + w
+            ph_raw_end[pidx] = i + len(m.group())
+            ex += w
+            i = m.end()
+            pidx += 1
+        else:
+            ex += 1
+            i += 1
+    return d_exp, d_raw, ph_start, ph_end, ph_raw_end
+
+
+def _as_int(v):
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def remap_formats(vn_text, items):
+    """Rewrite formats_ start_/end_ to the VN placeholder positions.
+
+    formats_[i] is a zero-length marker at the expanded position right
+    after placeholder `index_`. Returns the number of changed entries.
+    """
+    if not items:
+        return 0
+    _, _, _, ph_end, _ = _scan_expanded(vn_text)
+    changed = 0
+    for item in items:
+        el = item.get("Element")
+        if not el:
+            continue
+        ix = _as_int(el.get("index_"))
+        e = ph_end.get(ix) if ix is not None else None
+        if e is None:
+            continue
+        s = str(e)
+        if el.get("start_") != s or el.get("end_") != s:
+            el["start_"] = s
+            el["end_"] = s
+            changed += 1
+    return changed
+
+
+def remap_dynamics(vn_text, colors, items):
+    """Rewrite dynamics_ start_ to VN positions per dtag.
+
+    dtag semantics (validated against the EN/KO ground truth):
+      24   expanded start of the k-th <d> in order of appearance
+      28   expanded start of the <d> right before placeholder `index_`
+      29   expanded start of the <d> right after  placeholder `index_`
+      16   colors_[index_].start_ (raw color region open)
+      17   raw position after the <d> closing color region `index_`
+      4/26 raw position of the <d> right after placeholder `index_`
+    Returns the number of changed entries.
+    """
+    if not items:
+        return 0
+    d_exp, d_raw, ph_start, ph_end, ph_raw_end = _scan_expanded(vn_text)
+    changed = 0
+    d24 = 0
+    for item in items:
+        el = item.get("Element")
+        if not el:
+            continue
+        dt = _as_int(el.get("dtag_"))
+        ix = _as_int(el.get("index_"))
+        nv = None
+        if dt == 24:
+            if d24 < len(d_exp):
+                nv = d_exp[d24]
+            d24 += 1
+        elif dt == 28 and ix is not None:
+            p = ph_start.get(ix)
+            if p is not None and p >= 3:
+                nv = p - 3
+        elif dt == 29 and ix is not None:
+            p = ph_end.get(ix)
+            if p is not None:
+                nv = p
+        elif dt in (4, 26) and ix is not None:
+            p = ph_raw_end.get(ix)
+            if p is not None:
+                nv = p
+        elif dt == 16 and ix is not None and 0 <= ix < len(colors):
+            nv = _as_int(colors[ix].get("Element", {}).get("start_"))
+        elif dt == 17 and ix is not None and 0 <= ix < len(colors):
+            cs = _as_int(colors[ix].get("Element", {}).get("start_"))
+            if cs is not None:
+                cands = [r for r in d_raw if r > cs]
+                if cands:
+                    nv = cands[0] + 3
+        if nv is not None and el.get("start_") != str(nv):
+            el["start_"] = str(nv)
+            changed += 1
+    return changed
 
 
 def load_tag(path):
@@ -364,8 +496,18 @@ def remap_tag_file(game_dir, rel_text, rel_tag, tag_blob, en_text, vn_text,
         vn_txt = vn_by_id.get((rid, subid), "")
         if not vn_txt:
             continue
+        # dynamics_/formats_ are positional markers (no EN/ko range pairing like
+        # the span keys below). Recompute them purely from the VN text so they
+        # point at the right <d>/placeholder offsets in the translated string.
+        # This is text-driven and independent of EN ground truth, so it runs
+        # for KO-only rows too.
+        if el.get("formats_"):
+            changed += remap_formats(vn_txt, el["formats_"])
+        if el.get("dynamics_"):
+            colors = el.get("colors_") or []
+            changed += remap_dynamics(vn_txt, colors, el["dynamics_"])
         if en_el is None:
-            # no EN ground truth -> leave this entry untouched
+            # no EN ground truth -> span ranges left untouched
             skipped += 1
             continue
         en_txt = en_text.get((rid, subid), "") if en_text else ""
@@ -432,6 +574,9 @@ def main():
     ap.add_argument("--all", action="store_true",
                     help="process every *_tag.msg in text/ko and scenario/ko")
     ap.add_argument("--write", action="store_true", help="write changes back")
+    ap.add_argument("--fix-sizes", action="store_true",
+                    help="after --write, update ExternalFileSizes in data.i "
+                         "for every changed tag file")
     ap.add_argument("--overrides", default=None,
                     help="JSON file of manual VN ranges (tag_overrides.json)")
     ap.add_argument("--report", default=None,
@@ -513,6 +658,23 @@ def main():
         with open(args.report, "w", encoding="utf-8") as fh:
             json.dump(report, fh, ensure_ascii=False, indent=1)
         print(f"wrote {len(report)} review entries to {args.report}")
+
+    if args.write and args.fix_sizes:
+        # The game validates the declared ExternalFileSizes of loose tag
+        # files against disk. Rewriting a tag table changes its size, so we
+        # must update the declared size in data.i or the engine ignores the
+        # patched tag and renders literal <d> markers.
+        from datai import fix_sizes
+        rels = []
+        for base in bases:
+            if base.startswith("text_scenario"):
+                rel = os.path.join("system/table/scenario/ko", base + "_tag.msg")
+            else:
+                rel = os.path.join("system/table/text/ko", base + "_tag.msg")
+            if os.path.exists(os.path.join(game, "data", rel)):
+                rels.append(rel)
+        fixes = fix_sizes(game, os.path.join(game, "data.i"), rels)
+        print(f"fixed {len(fixes)} ExternalFileSizes for tag files in data.i")
 
     print(f"\nTOTAL: files={len(bases)} ranges={total_rows} changed={total_changed}"
           + f" unfound={total_unfound} skipped={total_skipped} manual={total_manual}")
