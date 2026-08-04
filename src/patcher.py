@@ -17,6 +17,28 @@ from extract import extract
 from patch_engine import PatchEngine, read_msg
 
 
+def loose_ko_paths(game, index_bytes):
+    """Return the ko/ text + scenario .msg paths to materialize as loose files.
+
+    We reuse the bundled filelist to enumerate candidate `system/table/
+    {text,scenario}/ko/*.msg` paths and keep the ones that actually exist in
+    this build's archive. This is what turns an archive-only install (the
+    pristine game) into one whose ko/ tables live on disk, where patching
+    happens.
+    """
+    from common import load_filelist
+    rels = []
+    for p in load_filelist():
+        if not p.endswith(".msg"):
+            continue
+        if not (p.startswith("system/table/text/ko/") or
+                p.startswith("system/table/scenario/ko/")):
+            continue
+        if extract(game, p, index_bytes) is not None:
+            rels.append(p)
+    return rels
+
+
 def en_path(file):
     return table_rel(file).replace("/ko", "/en")[len("data/"):] + "/" + file
 
@@ -124,6 +146,16 @@ def patch_install(game, index, engine, filelist,
 
     with open(index, "rb") as f:
         index_bytes = f.read()
+
+    # Materialize archive-only ko/ tables into loose files so patching can
+    # modify them, and register them in data.i (idempotent for loose installs).
+    loose = loose_ko_paths(game, index_bytes)
+    created, registered = datai.materialize_loose(game, index, loose)
+    if created or registered:
+        log(f"  materialized ko tables: {created} file(s), "
+            f"{registered} registered in data.i")
+        with open(index, "rb") as f:
+            index_bytes = f.read()
 
     for file in engine.iter_files():
         path = os.path.join(game, table_rel(file), file)

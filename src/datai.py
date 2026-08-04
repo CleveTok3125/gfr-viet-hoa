@@ -80,6 +80,141 @@ def fix_sizes(game_dir, index_path, paths_to_fix):
     return fixes
 
 
+def read_external(index_path):
+    """Return the external-file vectors as (hashes, sizes), sorted by hash.
+
+    The game keeps ExternalFileHashes sorted (binary searched); the two
+    vectors are parallel, so hashes[i] maps to sizes[i].
+    """
+    buf, root = load_root(index_path)
+    vh = _vec_data(buf, root, 16)
+    vs = _vec_data(buf, root, 18)
+    n = root.ExternalFileHashesLength()
+    items = []
+    for i in range(n):
+        h = struct.unpack("<Q", buf[vh + i * 8:vh + i * 8 + 8])[0]
+        s = struct.unpack("<Q", buf[vs + i * 8:vs + i * 8 + 8])[0]
+        items.append((h, s))
+    items.sort()
+    return items
+
+
+def rebuild_index(index_path, extra_external=None):
+    """Rewrite data.i, merging `extra_external` (list of (hash, size)) into
+    the ExternalFileHashes/ExternalFileSizes vectors.
+
+    Every other field is preserved byte-for-byte, so the rebuilt index is
+    identical to the original except for the merged external entries. This is
+    required because FlatBuffers vectors cannot be resized in place.
+    """
+    import flatbuffers
+    from gbfr_schema import IndexFile as IF
+
+    buf, root = load_root(index_path)
+    src = bytes(buf)
+
+    def rb(slot, esz):
+        o = root._tab.Offset(slot)
+        if o == 0:
+            return b"", 0
+        va = root._tab.Vector(o)
+        n = root._tab.VectorLen(o)
+        return src[va:va + n * esz], n
+
+    def rstr(slot):
+        o = root._tab.Offset(slot)
+        return root._tab.String(o + root._tab.Pos) if o else None
+
+    codename = rstr(4)
+    num = root.NumArchives()
+    seed = root.XxhashSeed()
+    archive, _ = rb(10, 8)
+    f2c, nf2c = rb(12, 12)
+    chunks, nch = rb(14, 24)
+    exthash, _ = rb(16, 8)
+    extsize, _ = rb(18, 8)
+    cached, _ = rb(20, 4)
+
+    # resolve existing parallel external vectors
+    cur = read_external(index_path)
+    by_hash = {h: s for h, s in cur}
+    for h, s in (extra_external or []):
+        if h not in by_hash or by_hash[h] != s:
+            by_hash[h] = s
+    merged = sorted(by_hash.items())
+
+    b = flatbuffers.Builder(0)
+    codename_off = b.CreateString(codename.decode()) if codename else 0
+    arch_v = IF.CreateArchiveFileHashesVector(
+        b, [struct.unpack("<Q", archive[i:i + 8])[0] for i in range(0, len(archive), 8)])
+    IF.StartFileToChunkIndexersVector(b, nf2c)
+    for i in range(nf2c - 1, -1, -1):
+        r = f2c[i * 12:i * 12 + 12]
+        b.Prep(4, 12)
+        for j in range(11, -1, -1):
+            b.PrependUint8(r[j])
+    f2c_v = b.EndVector()
+    IF.StartChunksVector(b, nch)
+    for i in range(nch - 1, -1, -1):
+        cv = chunks[i * 24:i * 24 + 24]
+        b.Prep(8, 24)
+        for j in range(23, -1, -1):
+            b.PrependUint8(cv[j])
+    chunks_v = b.EndVector()
+    eh_v = IF.CreateExternalFileHashesVector(b, [h for h, _ in merged])
+    es_v = IF.CreateExternalFileSizesVector(b, [s for _, s in merged])
+    cache_v = IF.CreateCachedChunkIndicesVector(
+        b, [struct.unpack("<I", cached[i:i + 4])[0] for i in range(0, len(cached), 4)])
+    IF.Start(b)
+    IF.AddCodename(b, codename_off)
+    IF.AddNumArchives(b, num)
+    IF.AddXxhashSeed(b, seed)
+    IF.AddArchiveFileHashes(b, arch_v)
+    IF.AddFileToChunkIndexers(b, f2c_v)
+    IF.AddChunks(b, chunks_v)
+    IF.AddExternalFileHashes(b, eh_v)
+    IF.AddExternalFileSizes(b, es_v)
+    IF.AddCachedChunkIndices(b, cache_v)
+    end = IF.End(b)
+    b.Finish(end)
+    with open(index_path, "wb") as f:
+        f.write(bytes(b.Output()))
+    return len(merged) - len(cur)  # number of entries added/updated
+
+
+def materialize_loose(game_dir, index_path, rel_paths):
+    """Extract `rel_paths` (e.g. system/table/text/ko/...) from the archive
+    into loose files under `game_dir/data`, and register each in data.i's
+    ExternalFileHashes/ExternalFileSizes.
+
+    Purely idempotent: files already present on disk and already registered
+    are left untouched. Returns (created, registered).
+    """
+    if not rel_paths:
+        return 0, 0
+    from extract import extract
+    index_bytes = open(index_path, "rb").read()
+    created = 0
+    extra = []
+    for rel in rel_paths:
+        disk = os.path.join(game_dir, "data", rel)
+        if not os.path.isfile(disk):
+            raw = extract(game_dir, rel, index_bytes)
+            if raw is None:
+                continue  # not present in archive for this build
+            os.makedirs(os.path.dirname(disk), exist_ok=True)
+            with open(disk, "wb") as f:
+                f.write(raw)
+            created += 1
+        else:
+            raw = open(disk, "rb").read()
+        extra.append((hash_path(rel), os.path.getsize(disk) if os.path.isfile(disk) else len(raw)))
+    registered = 0
+    if extra:
+        registered = rebuild_index(index_path, extra)
+    return created, registered
+
+
 def patch_ui_lang(index_path, filelist):
     """Redirect every `ui/.../kor/...` entry to its `eng` counterpart by
     copying the 12-byte FileToChunkIndexer struct. Returns (changed, missing)."""
