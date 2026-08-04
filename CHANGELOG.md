@@ -1,5 +1,39 @@
 # Changelog
 
+## v0.5.4 - pristine installs, tag tuning & restore (2026-08-04)
+
+- **Pristine-install support.** `apply.py` now materializes the archive-only
+  `ko/` tables into loose files (`src/datai.materialize_loose` +
+  `src/patcher.loose_ko_paths`) so the patch works on a clean game that has
+  no `data/system/table` directory on disk, and registers their hashes in
+  `data.i`. Manifest regenerated (180 files).
+- **Tuned tag tables as source of truth.** The tuned `*_tag.msg` tables are
+  snapshotted into the git-tracked `tag_tuning.json` (88 files, keyed per
+  `id_`/`subid_`); `apply.py` recreates every tag table from it and fixes the
+  declared `ExternalFileSizes`, so a fresh install no longer depends on
+  leftover on-disk tag state. `src/tag_tuning.py` provides
+  `--dump`/`--merge`/`--write`.
+- **Selective tag remap.** Only tag ranges that still carry raw English
+  positions (files the exe patch left untranslated) are re-remapped from the
+  EN ground truth; already-tuned ranges and `names_` are preserved unchanged.
+  This fixes wrong highlights (e.g. `Zegagrande` in `text_scenario_730`
+  showing as "ande vậy.") across ~20 untranslated files, with 0 out-of-bounds
+  spans on all 6414 rows. `tag_overrides.json` extended with 3 manual ranges.
+- **Restore & re-apply protection.** `apply.py --restore` returns the game to
+  its pristine state from the auto-created `vietnam_backup/` (restores
+  `data.i`, removes materialized tables, tuned tag tables and installed
+  fonts). Applying onto an already-patched install is now blocked with a
+  prompt for `--force` (idempotent re-apply) or `--restore`; `--skip-backup`
+  bypasses both.
+- **Speaker map tooling.** `src/build_speaker_map.py` builds
+  `data/scenario_speakers.json` (per-scenario speaker map used to decide the
+  Vietnamese address term for the gender-selectable Captain), annotates every
+  review context line with its speaker, and makes that annotation optional.
+- **Dialogue/HUD fixes.** Captain addressed as "thuyền trưởng" (remaining
+  "Anh" uses documented); "Defeated" HUD label no longer reads "Thất Bại";
+  in-battle level HUD uses "Lvl"; "Absolute Zero" fixed as "Độ Không Tuyệt
+  Đối" (tracking `text_chainburst`).
+
 ## v0.5.3 - bundle Vietnamese fonts (2026-08-04)
 
 - Bundled the 3 Vietnamese font files (`font/fttk_yoongothic750.{msg,_1.wtb,_2.wtb}`)
