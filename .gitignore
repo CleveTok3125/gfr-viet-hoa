@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
 *.zip
+!data/fonts.zip
 vietnam_backup/
 translations_new.json
 review.txt
