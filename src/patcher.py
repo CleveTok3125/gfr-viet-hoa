@@ -39,6 +39,38 @@ def loose_ko_paths(game, index_bytes):
     return rels
 
 
+FONTS_ZIP = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                         "data", "fonts.zip")
+
+
+def install_fonts(game, quiet=False):
+    """Install the bundled Vietnamese fonts (data/fonts.zip) as loose files.
+
+    The fonts carry the glyphs needed to render Vietnamese (the stock
+    yoongothic font in the archives does not). They are read by the game
+    straight from data/font/, no data.i registration required. Idempotent:
+    files already on disk are left untouched. Returns the number installed.
+    """
+    if not os.path.isfile(FONTS_ZIP):
+        if not quiet:
+            print(f"  fonts: {FONTS_ZIP} missing - skipped")
+        return 0
+    import zipfile
+    installed = 0
+    with zipfile.ZipFile(FONTS_ZIP) as zf:
+        for name in zf.namelist():
+            dest = os.path.join(game, "data", name)
+            if os.path.isfile(dest):
+                continue
+            os.makedirs(os.path.dirname(dest), exist_ok=True)
+            with zf.open(name) as src, open(dest, "wb") as out:
+                out.write(src.read())
+            installed += 1
+    if installed and not quiet:
+        print(f"  fonts: installed {installed} Vietnamese font file(s)")
+    return installed
+
+
 def en_path(file):
     return table_rel(file).replace("/ko", "/en")[len("data/"):] + "/" + file
 
@@ -177,6 +209,8 @@ def patch_install(game, index, engine, filelist,
         results["ui_redirected"] = changed
         results["ui_missing"] = missing
         log(f"  ui kor->eng redirected: {changed}, missing (skipped): {len(missing)}")
+
+    install_fonts(game, quiet=quiet)
 
     if do_fix_sizes:
         fixes = datai.fix_sizes(

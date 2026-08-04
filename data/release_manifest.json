@@ -137,6 +137,9 @@
   "data/system/table/scenario/ko/text_scenario_740.msg": "757ab988e354fbcacf5092ef753a6984",
   "data/system/table/scenario/ko/text_scenario_740_tag.msg": "33b2ca4ecbdea2002bbd632192a0fb7e",
   "data/system/table/text/ko/text_chainburst.msg": "824155064d57ba190ebf1e655ac9bdf0",
-  "data/system/table/text/ko/text_chainburst_tag.msg": "33b2ca4ecbdea2002bbd632192a0fb7e"
+  "data/system/table/text/ko/text_chainburst_tag.msg": "33b2ca4ecbdea2002bbd632192a0fb7e",
+  "data/font/fttk_yoongothic750.msg": "7e2b66868cf1c6d37257c8c97a1c7f0c",
+  "data/font/fttk_yoongothic750_1.wtb": "7927bbe36d2df2ad7a10e95e831e98a6",
+  "data/font/fttk_yoongothic750_2.wtb": "8718bc114277b2378a18c604f8e8b68c"
  }
 }

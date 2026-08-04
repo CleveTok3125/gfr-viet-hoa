@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.5.3 - bundle Vietnamese fonts (2026-08-04)
+
+- Bundled the 3 Vietnamese font files (`font/fttk_yoongothic750.{msg,_1.wtb,_2.wtb}`)
+  into `data/fonts.zip` so the patch is self-contained. The stock `yoongothic`
+  font in the game archives lacks the glyphs to render Vietnamese, so these
+  loose `data/font/` overrides are required for correct in-game display.
+- `apply.py` now installs the fonts as loose files (read directly by the game,
+  no `data.i` registration needed). Idempotent: existing files are left alone.
+- `build_patch.py` and `verify.py` now include the fonts in the release zip
+  and the reference manifest (140 files, 0 mismatches).
+
 ## v0.5.2 - literal `<d>` marker fix (2026-08-03)
 
 - Fixed literal `<d>` markers rendering in dialogue/pop-up text. The tag

@@ -32,6 +32,7 @@ counterparts, so no English voice/story lock is lost.
 translations.json      EN -> VI table (source of truth)
 rules.json             stat_map + node-transform rules
 filelist.txt.gz        internal file paths (hash -> path), under data/
+fonts.zip              Vietnamese font overrides (data/font/*), under data/
 gfrpatch/              runnable module: python3 -m gfrpatch
 apply.py               one-command patch for end users
 build_patch.py         build a self-contained release zip
