@@ -154,6 +154,15 @@ def main():
         lines = blk.split("\n")
         out_lines = []
         for ln in lines:
+            # Annotate every context line that carries an id with its speaker.
+            cm = re.search(r"\[([^\]]+)\]", ln)
+            if cm and not ln.strip().startswith(">>>"):
+                cid = cm.group(1)
+                csp = speakers.get(cid, {})
+                if csp.get("chara"):
+                    out_lines.append("      👤 {} ({}{})".format(
+                        csp["chara"], csp.get("name_ko", "?"),
+                        " / " + csp["name_en"] if csp.get("name_en") else ""))
             out_lines.append(ln)
             if ln.startswith("FILE:"):
                 out_lines.append(speaker_line)
