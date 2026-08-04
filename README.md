@@ -231,6 +231,14 @@ It diffs the English sources (extracted from `data.i`) against the installed
 
 ## Known issues
 
+- **"Anh" may still be used for The Captain.** The Captain is a
+  gender-selectable protagonist (Gran/Djeeta). The original translation
+  defaults to the masculine "Anh" when addressing the captain, so some
+  dialogue lines may still read "Anh" even for a female captain. A pass
+  over the scenario lines converted the bulk of these to "thuyền trưởng"
+  (captain) or "bạn", and the speaker map in `data/scenario_speakers.json`
+  plus the review script (`src/build_speaker_map.py`) make it possible to
+  audit the rest; a few stragglers may remain.
 - **Some pop-ups, waiting/loading screens lose their text.** Certain UI
   elements (pop-up prompts, wait dialogs, loading screens) can end up blank or
   missing text after the translation. This is under investigation; the cause is

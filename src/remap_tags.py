@@ -523,9 +523,18 @@ def remap_tag_file(game_dir, rel_text, rel_tag, tag_blob, en_text, vn_text,
             src_items = en_el.get(key, [])
             for n, item in enumerate(items):
                 elem = item["Element"]
+                override = id_over.get(key, {}).get(str(n))
                 if n >= len(src_items):
-                    # ko tag has more ranges than EN tag; no ground truth,
-                    # leave this range untouched to stay idempotent
+                    # ko tag has more ranges than EN tag. Without a manual
+                    # override there is no ground truth, so leave the range
+                    # untouched to stay idempotent. A manual override extends
+                    # the tag set (e.g. an added player-name placeholder)
+                    # and is applied verbatim.
+                    if override:
+                        ns, ne = int(override[0]), int(override[1])
+                        elem["start_"] = str(ns)
+                        elem["end_"] = str(ne)
+                        changed += 1
                     continue
                 try:
                     start = int(src_items[n]["Element"]["start_"])
