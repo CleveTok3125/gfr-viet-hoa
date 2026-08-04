@@ -81,6 +81,24 @@ verifies every table still unpacks, and is **idempotent** (re-running reports
 nothing to patch). Close the game before patching (running game files are
 locked), then launch the game with language = Korean.
 
+**Restoring the pristine game.** The first apply run stores the untouched
+`data.i` (plus the ko/ tables) in `<game>/vietnam_backup/`. To undo a patch
+and return the game to its original state:
+
+```bash
+python3 -m gfrpatch --game "<game>" --restore
+```
+
+This restores `data.i` from the backup and removes the loose files the patch
+created (the materialized `ko/` tables, tuned `*_tag.msg` tables, and the
+installed fonts). Sound/ui and every archive-only file are left untouched; a
+later `apply.py` run rebuilds the patch from scratch.
+
+**Re-apply protection.** If the install looks already patched (`data.i`
+differs from the backup) `apply.py` aborts with a hint and asks for
+`--force` to proceed anyway (safe: it is idempotent), or `--restore` to
+revert. Use `--skip-backup` to skip both the backup and this check.
+
 The dialogue highlight ranges live in `*_tag.msg`. They are remapped to the
 Vietnamese text once, before a release is built, with
 `python3 -m src.remap_tags --all --game "<game>" --write --fix-sizes` (this is
@@ -130,7 +148,8 @@ When a tag is later fixed by hand, overwrite the affected `id_::subid_`
 entry inside `tag_tuning.json`; everything else keeps working unchanged and
 no old disk data is relied on.
 
-Options: `--backup-dir <dir>`, `--no-ui`, `--no-fix-sizes`, `--skip-backup`.
+Options: `--backup-dir <dir>`, `--no-ui`, `--no-fix-sizes`, `--skip-backup`,
+`--force`, `--restore`.
 
 The plain `apply.py` script (with auto-detection) works identically.
 
