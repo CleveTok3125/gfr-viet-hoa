@@ -37,8 +37,8 @@ VN_SCENARIO_DIR = "data/system/table/scenario/ko"
 FINGERPRINT_FILES = ["text_ui.msg", "text.msg"]
 
 TEXT_FILES = sorted(
-    "text.msg text_badge.msg text_communication.msg text_dialog.msg "
-    "text_fate_episode.msg text_limit_bonus.msg text_note.msg "
+    "text.msg text_badge.msg text_chainburst.msg text_communication.msg "
+    "text_dialog.msg text_fate_episode.msg text_limit_bonus.msg text_note.msg "
     "text_skillboard.msg text_stage.msg text_status.msg text_story.msg "
     "text_tutorial.msg text_ui.msg text_uskill.msg".split()
 )

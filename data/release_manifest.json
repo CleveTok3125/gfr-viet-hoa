@@ -1,7 +1,7 @@
 {
  "build": "2.0.3",
  "files": {
-  "data.i": "27b6361474624fa18ab783223e8eedc3",
+  "data.i": "1d98b144659f789c93796e155602bc24",
   "data/system/table/text/ko/text.msg": "7ab1d29e3602ce19bc4b3e2e508fcd6e",
   "data/system/table/text/ko/text_tag.msg": "e9ed3c338ce3d8908be64a01d574afdb",
   "data/system/table/text/ko/text_badge.msg": "8989e2904c4613252a6030902db0818f",
@@ -26,11 +26,11 @@
   "data/system/table/text/ko/text_story_tag.msg": "cb94037c4ccc5b2e5b70acd07aba535f",
   "data/system/table/text/ko/text_tutorial.msg": "52814aae49b774e50fe0757d2e8beb8a",
   "data/system/table/text/ko/text_tutorial_tag.msg": "2831f11795f47cfc0b9ed3fe0e3f256d",
-  "data/system/table/text/ko/text_ui.msg": "7f5e5ed495352df8b738ba5c12e995d3",
+  "data/system/table/text/ko/text_ui.msg": "ccad9cfee0458d2f6e37659f0707f223",
   "data/system/table/text/ko/text_ui_tag.msg": "ff2450589fac898a22bdecca5f78ad3d",
   "data/system/table/text/ko/text_uskill.msg": "ab7ced1d0d19fca777dfd1fdd415a465",
   "data/system/table/text/ko/text_uskill_tag.msg": "e7e0f6eef56921009d0d2f3f91202743",
-  "data/system/table/scenario/ko/text_scenario_010.msg": "cb43e3131651524166d2b3f2df2cd393",
+  "data/system/table/scenario/ko/text_scenario_010.msg": "500e80db7fa77f737b1624fd69c82320",
   "data/system/table/scenario/ko/text_scenario_010_tag.msg": "bafcf44fbfbb8c3a45f7f069791b0467",
   "data/system/table/scenario/ko/text_scenario_020.msg": "0c9fbfb0224c270a7633317ba5287a59",
   "data/system/table/scenario/ko/text_scenario_020_tag.msg": "4760d88bbcf48644e9ad515b96fde9c3",
@@ -135,6 +135,8 @@
   "data/system/table/scenario/ko/text_scenario_730.msg": "c7ecfe3faa6c0b87f317c8c7072ff59e",
   "data/system/table/scenario/ko/text_scenario_730_tag.msg": "9d39f87bd4baa6e9b02fe4b42ce55290",
   "data/system/table/scenario/ko/text_scenario_740.msg": "f6735e0febe0ee728d0f53beedaf5d7f",
-  "data/system/table/scenario/ko/text_scenario_740_tag.msg": "d40fe5bb0d58d95ef58458be7ace4aa5"
+  "data/system/table/scenario/ko/text_scenario_740_tag.msg": "d40fe5bb0d58d95ef58458be7ace4aa5",
+  "data/system/table/text/ko/text_chainburst.msg": "824155064d57ba190ebf1e655ac9bdf0",
+  "data/system/table/text/ko/text_chainburst_tag.msg": "d40fe5bb0d58d95ef58458be7ace4aa5"
  }
 }
