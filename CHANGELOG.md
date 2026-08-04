@@ -6,8 +6,10 @@
   into `data/fonts.zip` so the patch is self-contained. The stock `yoongothic`
   font in the game archives lacks the glyphs to render Vietnamese, so these
   loose `data/font/` overrides are required for correct in-game display.
-- `apply.py` now installs the fonts as loose files (read directly by the game,
-  no `data.i` registration needed). Idempotent: existing files are left alone.
+- `apply.py` now installs the fonts as loose files and registers their hashes
+  in `data.i` ExternalFileHashes/ExternalFileSizes, so the game loads the
+  loose font instead of the archive one (same mechanism as the ko/ tables).
+  Idempotent: existing files are left alone.
 - `build_patch.py` and `verify.py` now include the fonts in the release zip
   and the reference manifest (140 files, 0 mismatches).
 

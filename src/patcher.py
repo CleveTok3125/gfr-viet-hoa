@@ -47,27 +47,31 @@ def install_fonts(game, quiet=False):
     """Install the bundled Vietnamese fonts (data/fonts.zip) as loose files.
 
     The fonts carry the glyphs needed to render Vietnamese (the stock
-    yoongothic font in the archives does not). They are read by the game
-    straight from data/font/, no data.i registration required. Idempotent:
-    files already on disk are left untouched. Returns the number installed.
+    yoongothic font in the archives does not). They are written to
+    data/font/ and each hash is registered in data.i's ExternalFileHashes/
+    ExternalFileSizes so the game loads the loose file instead of the archive
+    one (same mechanism as the ko/ tables). Idempotent.
     """
     if not os.path.isfile(FONTS_ZIP):
         if not quiet:
             print(f"  fonts: {FONTS_ZIP} missing - skipped")
         return 0
     import zipfile
+    index = os.path.join(game, "data.i")
+    extra_external = []
     installed = 0
     with zipfile.ZipFile(FONTS_ZIP) as zf:
         for name in zf.namelist():
             dest = os.path.join(game, "data", name)
-            if os.path.isfile(dest):
-                continue
             os.makedirs(os.path.dirname(dest), exist_ok=True)
             with zf.open(name) as src, open(dest, "wb") as out:
                 out.write(src.read())
+            extra_external.append((datai.hash_path(name), os.path.getsize(dest)))
             installed += 1
-    if installed and not quiet:
-        print(f"  fonts: installed {installed} Vietnamese font file(s)")
+    added = datai.rebuild_index(index, extra_external)
+    if not quiet:
+        print(f"  fonts: installed {installed} font file(s), "
+              f"{added} registered in data.i")
     return installed
 
 
