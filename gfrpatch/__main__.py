@@ -21,6 +21,7 @@ from game_version import game_version
 from patch_engine import PatchEngine
 from patcher import patch_install, report
 from verify import verify
+from apply import md5_file, restore
 
 
 def pick_game_dir(explicit):
@@ -51,6 +52,11 @@ def main():
     ap.add_argument("--no-ui", action="store_true")
     ap.add_argument("--skip-backup", action="store_true")
     ap.add_argument("--no-fix-sizes", action="store_true")
+    ap.add_argument("--force", action="store_true",
+                    help="apply anyway even if the install looks already patched")
+    ap.add_argument("--restore", action="store_true",
+                    help="restore the game to its pristine state from the "
+                         "backup made by a previous apply run")
     args = ap.parse_args()
 
     game = pick_game_dir(args.game)
@@ -59,6 +65,23 @@ def main():
         sys.exit(1)
     index = os.path.join(game, "data.i")
     print(f"Game: {game}")
+
+    backup_dir = args.backup_dir or os.path.join(game, "vietnam_backup")
+    backup_index = os.path.join(backup_dir, "data.i")
+
+    if args.restore:
+        restore(game, index, backup_dir)
+        sys.exit(0)
+
+    if not args.skip_backup and os.path.isfile(backup_index):
+        cur_md5 = md5_file(index)
+        bak_md5 = md5_file(backup_index)
+        if cur_md5 != bak_md5 and not args.force:
+            print("This install looks already patched: data.i differs from the "
+                  "backup in " + backup_dir)
+            print("  - pass --force to re-apply anyway (idempotent), or")
+            print("  - pass --restore to return the game to its pristine state.")
+            sys.exit(2)
 
     meta = load_translations()["meta"]
     ver = game_version(os.path.join(game, "granblue_fantasy_relink.exe"))

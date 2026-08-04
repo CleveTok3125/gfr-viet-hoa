@@ -149,7 +149,8 @@ entry inside `tag_tuning.json`; everything else keeps working unchanged and
 no old disk data is relied on.
 
 Options: `--backup-dir <dir>`, `--no-ui`, `--no-fix-sizes`, `--skip-backup`,
-`--force`, `--restore`.
+`--force`, `--restore`. The `python3 -m gfrpatch` entrypoint accepts the same
+options.
 
 The plain `apply.py` script (with auto-detection) works identically.
 
