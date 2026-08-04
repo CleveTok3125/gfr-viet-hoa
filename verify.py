@@ -33,6 +33,11 @@ def patched_files():
     for f in load_translations()["translations"]:
         files.append(os.path.join(table_rel(f), f))
         files.append(os.path.join(table_rel(f), f[:-len(".msg")] + "_tag.msg"))
+    from patcher import FONTS_ZIP
+    if os.path.isfile(FONTS_ZIP):
+        import zipfile
+        with zipfile.ZipFile(FONTS_ZIP) as zf:
+            files.extend("data/" + name for name in zf.namelist())
     return files
 
 
