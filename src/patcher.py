@@ -216,6 +216,23 @@ def patch_install(game, index, engine, filelist,
 
     install_fonts(game, quiet=quiet)
 
+    # Recreate the tuned *_tag.msg tables from tag_tuning.json (single source
+    # of truth) so an install never depends on leftover on-disk tag state.
+    import tag_tuning
+    import common
+    tag_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                            "tag_tuning.json")
+    if os.path.isfile(tag_path):
+        try:
+            tag_data = tag_tuning.load(tag_path)
+            tag_changed = tag_tuning.write_to_game(game, tag_data, index)
+            if tag_changed:
+                log(f"  tags: wrote {len(tag_changed)} tuned tag table(s)")
+        except Exception as e:
+            log(f"  tags: tag_tuning.json skipped ({e})")
+    else:
+        log("  tags: tag_tuning.json missing - tag tables left as-is")
+
     if do_fix_sizes:
         fixes = datai.fix_sizes(
             game, index,
