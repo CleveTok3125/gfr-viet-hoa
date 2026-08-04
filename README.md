@@ -17,7 +17,10 @@ counterparts, so no English voice/story lock is lost.
   highlight ranges used for name colours and voice/text sync. The stored
   `start_`/`end_` offsets are character indices **into the English string**,
   so every tag is remapped to the matching position in the Vietnamese text
-  (`src/remap_tags.py`).
+  (`src/remap_tags.py`). The tuned tag tables are snapshotted into
+  `tag_tuning.json` below, so `apply.py` recreates them (and their
+  `data.i` sizes) directly — no per-install `remap_tags` run is needed and
+  installs never depend on leftover on-disk tag state.
 - `data.i` is the FlatBuffers index of the archive. The patch:
   - redirects every `ui/.../kor/...` entry to its `eng` counterpart
     (`FileToChunkIndexers` structs) so the game loads English UI assets, and
@@ -41,10 +44,12 @@ verify.py              hash-check patched files vs release manifest
 rebuild_translations.py  regenerate the table from a patched install
 update_filelist.py     fetch the latest file list from GBFRDataTools
 tag_overrides.json     manual VN highlight ranges for hard-to-resolve tags
+tag_tuning.json        tuned *_tag.msg snapshot (single source; apply recreates tags)
 vendor/                bundled pure-Python deps (msgpack, flatbuffers)
 src/                   engine, data.i handling, extraction helpers
 src/remap_tags.py      remap *_tag.msg offsets to the VN text (--write --fix-sizes)
 src/tag_review.py      interactive review of unresolved highlight ranges
+src/tag_tuning.py      dump/merge/write tag_tuning.json
 ```
 
 No external pip installs are needed; the bundled `vendor/` is used automatically.
@@ -96,6 +101,34 @@ cannot be located automatically. They are surfaced with
 `python3 -m src.tag_review --game "<game>"`, which asks for the exact VN
 range and stores the answer in `tag_overrides.json`. `remap_tags.py` applies
 those overrides verbatim when `--overrides tag_overrides.json` is passed.
+
+### Tag tuning source of truth: `tag_tuning.json`
+
+`tag_tuning.json` is a git-tracked snapshot of the *tuned* `*_tag.msg` tables
+(the TheRedTeam tune plus our Vietnamese remap), keyed per `id_`/`subid_`. It
+is the single source of truth: `apply.py` writes every tag table from this
+file during patching and fixes the declared `ExternalFileSizes`, so a fresh
+install gets the exact tune without running `remap_tags` by hand.
+
+To (re)create the snapshot from a patched install:
+
+```bash
+python3 -m src.tag_tuning --game "<game>" --dump tag_tuning.json
+```
+
+To refresh only the entries that changed since the snapshot (a newer
+translation or a new remap), merge a fresh dump over the file — untouched
+entries keep their existing values:
+
+```bash
+python3 -m src.tag_tuning --game "<game>" --merge tag_tuning.json
+python3 -m src.tag_tuning --game "<game>" --merge tag_tuning.json --write
+```
+
+`--write` also recreates the tables in the game and re-fixes their sizes.
+When a tag is later fixed by hand, overwrite the affected `id_::subid_`
+entry inside `tag_tuning.json`; everything else keeps working unchanged and
+no old disk data is relied on.
 
 Options: `--backup-dir <dir>`, `--no-ui`, `--no-fix-sizes`, `--skip-backup`.
 
