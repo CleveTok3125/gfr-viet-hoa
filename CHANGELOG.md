@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.5.5 - interactive editor for text & markers (2026-08-05)
+
+- **New TUI editor.** `src/tr_edit.py` (built on `textual`; the only tool in
+  the repo that needs a pip install) browses the table and edits each entry
+  together with its dialogue highlight markers; `src/tr_edit_core.py` holds
+  the UI-free data layer. Each item renders as a *compound string* (VN text
+  with inline markers) and Ctrl+S round-trips it back into the three
+  authoring files at once: `translations.json`, `decisions.json`,
+  `tag_overrides.json`.
+- **`decisions.json` authoring layer.** Highlight decisions are stored in
+  phrase form (VN phrase per row id) next to the positional
+  `tag_overrides.json`; `src/apply_decisions.py` expands phrases into
+  positions against an installed copy, and the editor keeps both files in
+  sync on every save.
+- **Marker conventions.** `{c:}`/`{w:}`/`{b:}`/`{cw:}` highlight markers and
+  `{p}` player-name insertion point (literals escaped as `\{` `\}` `\\`).
+  The speaker prefix `[Speaker]` is shown read-only above the editor, is
+  auto re-added on save, and is excluded from the text stats.
+  `tag_tuning.json` is intentionally left untouched.
+- **Editor features.** Case-insensitive debounced search (EN/VN/ID), file
+  filter with an empty default (= browse all tables), per-row FILE column,
+  live stats (words/chars, cursor position, longest line, EN wrap
+  reference), and a non-destructive `self_test` round-trip.
+
 ## v0.5.4 - pristine installs, tag tuning & restore (2026-08-04)
 
 - **Pristine-install support.** `apply.py` now materializes the archive-only

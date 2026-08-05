@@ -34,6 +34,7 @@ counterparts, so no English voice/story lock is lost.
 ```
 translations.json      EN -> VI table (source of truth)
 rules.json             stat_map + node-transform rules
+decisions.json         highlight decisions, phrase form (written by tr_edit)
 filelist.txt.gz        internal file paths (hash -> path), under data/
 fonts.zip              Vietnamese font overrides (data/font/*), under data/
 gfrpatch/              runnable module: python3 -m gfrpatch
@@ -48,8 +49,11 @@ tag_tuning.json        tuned *_tag.msg snapshot (single source; apply recreates 
 vendor/                bundled pure-Python deps (msgpack, flatbuffers)
 src/                   engine, data.i handling, extraction helpers
 src/remap_tags.py      remap *_tag.msg offsets to the VN text (--write --fix-sizes)
+src/apply_decisions.py expand decisions.json phrases into tag_overrides.json ranges
 src/tag_review.py      interactive review of unresolved highlight ranges
 src/tag_tuning.py      dump/merge/write tag_tuning.json
+src/tr_edit.py         interactive TUI editor for text + markers
+src/tr_edit_core.py    editor data layer (compound strings, round-trip)
 ```
 
 No external pip installs are needed; the bundled `vendor/` is used automatically.
@@ -192,16 +196,66 @@ zip.
 
 ## Adding translations
 
-Edit `translations.json`. Every key must be the exact English string as found
-in the game (extract it with `src/extract.py` if unsure), the value the
-Vietnamese text. Keep proper names, format placeholders (`{0}`, `<d>`), and
-credits/license text unchanged. Run `apply.py` on a fresh English install to
-verify, then `build_patch.py` to ship.
+Edit `translations.json` directly, or use the interactive TUI editor
+(`tr_edit.py`, below) to work on the text together with its highlight markers.
+Every key must be the exact English string as found in the game (extract it
+with `src/extract.py` if unsure), the value the Vietnamese text. Keep proper
+names, format placeholders (`{0}`, `<d>`), and credits/license text unchanged.
+Run `apply.py` on a fresh English install to verify, then `build_patch.py` to
+ship.
 
 The table covers the 14 main text tables plus 53 battle-scenario dialogue
 tables (`data/system/table/scenario/ko/*`). Scenario dialogue is based on the
 base-game translation by **TheRedTeam** (before the Endless Ragnarok DLC);
 see `meta.credits` in `translations.json`.
+
+### Editing with the TUI editor (`tr_edit`)
+
+`src/tr_edit.py` is a full-screen editor (built on `textual`) for browsing
+the table and editing each entry together with its dialogue highlight markers.
+It is the only tool in this repo that needs a pip install (`pip install
+textual`); the patch pipeline itself stays pure stdlib + bundled `vendor/`.
+Run it from the repo root:
+
+```bash
+PYTHONPATH=src:vendor python3 src/tr_edit.py \
+    --game "/path/to/install" [--file text_scenario_030]
+```
+
+Each entry is shown as a *compound string*: the Vietnamese text with inline
+markers (conventions below). Saving (Ctrl+S) writes back to
+`translations.json`, `decisions.json` and `tag_overrides.json` in one go.
+
+Keys:
+
+- Up/Down (or j/k) — move between items
+- Ctrl+E — focus the editor
+- Ctrl+S — save the current edit (writes all three JSONs)
+- Ctrl+R — discard the current edit, reload from the saved state
+- Ctrl+F — focus search (EN/VN/ID, case-insensitive, debounced)
+- Ctrl+L — focus the file filter (empty = browse all tables)
+- Ctrl+N — next table file
+- Esc — back to the item list
+- Ctrl+Q — quit
+
+Marker conventions (self-defined; `tag_tuning.json` is intentionally left
+untouched):
+
+```
+[Speaker]     read-only speaker prefix (scenario only); shown above the
+              editor, auto re-added on save, never counted in the stats
+{c:phrase}    colors_  highlight
+{w:phrase}    words_   highlight
+{b:phrase}    bolds_   highlight
+{cw:phrase}   colors_+words_ on the same phrase
+{p}           zero-width player-name insertion point
+\{  \}  \\    escape a literal brace / backslash
+```
+
+Highlight decisions are stored in phrase form in `decisions.json` (VN phrase
+per row id). `src/apply_decisions.py` expands them into the positional
+`tag_overrides.json` ranges against an installed copy of the game; the editor
+keeps both files in sync on every save.
 
 ## Operating this project (handover guide)
 
