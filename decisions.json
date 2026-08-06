@@ -1316,6 +1316,18 @@
      "khao khát"
     ]
    }
+  },
+  "SNT_WD720020_0170": {
+   "words_": {
+    "0": [
+     "Núi Neigelith."
+    ]
+   },
+   "colors_": {
+    "0": [
+     "Núi Neigelith."
+    ]
+   }
   }
  },
  "text_ui": {
@@ -6444,5 +6456,9 @@
     ]
    }
   }
- }
+ },
+ "text_story": {},
+ "text_note": {},
+ "text_fate_episode": {},
+ "text": {}
 }
