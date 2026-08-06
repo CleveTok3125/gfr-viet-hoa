@@ -65,6 +65,7 @@ class Store:
         self.tables = self.translations.get("translations", {})
         self.decisions = self._load_json("decisions.json")
         self.overrides = self._load_json("tag_overrides.json")
+        self.tuned = self._load_json("tag_tuning.json")  # spans baked into game
         self.speakers = self._load_json("data/scenario_speakers.json")
         self._id_cache = {}
         # path -> Store index for atomic saves
@@ -195,11 +196,49 @@ def iter_items(store, bases=None, holds=None):
             yield it
 
 
+_WILDCARD_RE = re.compile(r"[\*\?]")
+_last_query = None
+_last_re = None
+
+
+def _wildcard_regex(q):
+    """Compile ``q`` into a case-insensitive regex with wildcard support.
+
+    ``*`` matches any run of characters (including none); ``?`` matches any
+    single character. Every other character is matched literally, so searching
+    for e.g. ``grand*ships`` finds any value containing "grand..." + "ships".
+    The compiled regex is cached because ``search_hit`` runs per item.
+    """
+    global _last_query, _last_re
+    if q == _last_query and _last_re is not None:
+        return _last_re
+    parts = []
+    for tok in _WILDCARD_RE.split(q):
+        parts.append(re.escape(tok))
+    out = ""
+    i = 0
+    for tok in _WILDCARD_RE.findall(q):
+        out += parts[i] + (".*" if tok == "*" else ".")
+        i += 1
+    out += parts[-1]
+    _last_re = re.compile(out, re.IGNORECASE | re.DOTALL)
+    _last_query = q
+    return _last_re
+
+
 def search_hit(store, item, query):
-    """Case-insensitive match of ``query`` against original/translation/ids."""
-    q = query.lower()
-    if not q:
+    """Case-insensitive match of ``query`` against original/translation/ids.
+
+    ``*`` and ``?`` act as wildcards (any run / any single character);
+    otherwise the match is a plain substring test.
+    """
+    if not query:
         return True
+    if _WILDCARD_RE.search(query):
+        rx = _wildcard_regex(query)
+        return bool(rx.search(item.en) or rx.search(item.vn)
+                    or any(rx.search(rid) for rid in item.ids))
+    q = query.lower()
     if q in item.en.lower() or q in item.vn.lower():
         return True
     return any(q in rid.lower() for rid in item.ids)
@@ -212,6 +251,32 @@ def matches(store, item, query):
 # --------------------------------------------------------------------------
 # Markers
 # --------------------------------------------------------------------------
+
+
+def _tuned_spans(store, base, rid, key):
+    """Return [(start, end), ...] for a highlight key from tag_tuning.json.
+
+    These are the spans currently baked into the game's ``*_tag.msg`` (from the
+    TheRedTeam tune). The editor reads them as a fallback so highlights that
+    exist in the game but were never recorded in decisions/overrides are shown
+    and edited too, instead of being silently lost behind a stale range.
+    """
+    try:
+        entries = (store.tuned or {}).get("files", {}).get(base, {})
+    except Exception:
+        return []
+    out = []
+    for _k, rec in entries.items():
+        if rec.get("id_") != rid:
+            continue
+        for item in rec.get(key, []) or []:
+            el = item.get("Element", item)
+            try:
+                s, e = int(el["start_"]), int(el["end_"])
+            except (KeyError, ValueError, TypeError):
+                continue
+            out.append((s, e))
+    return out
 
 
 def _load_markers(store, file, ids, vn):
@@ -235,19 +300,35 @@ def _load_markers(store, file, ids, vn):
             ovo = ovr.get(key, {})
             all_idx = set(map(str, deco)) | set(map(str, ovo))
             for i in sorted(all_idx, key=int):
+                # The override stores the exact character range in the VN text,
+                # so prefer it: it stays correct even when the decision phrase
+                # differs only in whitespace (newline vs space, etc.).
                 phrase = None
-                if str(i) in deco and isinstance(deco[str(i)], list) and deco[str(i)]:
-                    phrase = deco[str(i)][0]
-                elif str(i) in ovo:
+                if str(i) in ovo:
                     s, e = int(ovo[str(i)][0]), int(ovo[str(i)][1])
                     if 0 <= s <= e <= len(vn):
                         phrase = vn[s:e]
+                elif str(i) in deco and isinstance(deco[str(i)], list) and deco[str(i)]:
+                    phrase = deco[str(i)][0]
                 if not phrase:
                     continue
                 start = vn.find(phrase)
                 if start < 0:
                     continue
                 groups.setdefault((start, phrase), set()).add(TAG[key])
+            # fall back to spans already baked into the game's tuned tags so a
+            # highlight the user never touched in the editor still shows up.
+            # Once a rid has ANY override, the override is the sole authority
+            # for that rid: tuned spans no longer apply (they are dropped at
+            # patch time), so do not resurrect them here.
+            if ovr:
+                continue
+            for s, e in _tuned_spans(store, base, rid, key):
+                if 0 <= s <= e <= len(vn):
+                    phrase = vn[s:e]
+                    start = vn.find(phrase)
+                    if start >= 0:
+                        groups.setdefault((start, phrase), set()).add(TAG[key])
     highlights = [("".join(sorted(tags)), phrase)
                   for (start, phrase), tags in sorted(groups.items())]
     return highlights, player_pos
@@ -401,6 +482,11 @@ def apply_edit(store, item, compound):
                             f"{rid} {k}[{idx}]: phrase {ph[0]!r} not found in text")
                         continue
                     kmap[idx] = [s, s + len(ph[0])]
+            elif _tuned_spans(store, base, rid, k):
+                # The highlight exists in the tuned tags baked into the game,
+                # but the user removed it. Keep an empty entry as a tombstone
+                # so the tuned fallback in _load_markers does not bring it back.
+                ov[k] = {}
             else:
                 ov.pop(k, None)
         # names_
