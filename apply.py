@@ -136,12 +136,20 @@ def main():
               "against this build to refresh.")
 
     filelist = load_filelist()
+    overrides = {}
+    overrides_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                  "tag_overrides.json")
+    if os.path.isfile(overrides_path):
+        import json as _json
+        with open(overrides_path, "r", encoding="utf-8") as fh:
+            overrides = _json.load(fh)
     results = patch_install(
         game, index, engine, filelist,
         backup_dir=args.backup_dir,
         skip_backup=args.skip_backup,
         do_ui=not args.no_ui,
         do_fix_sizes=not args.no_fix_sizes,
+        overrides=overrides,
     )
     report(results)
 

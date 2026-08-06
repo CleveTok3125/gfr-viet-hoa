@@ -153,7 +153,7 @@ def patch_file_indexed(game, index, file, engine, index_bytes):
 
 def patch_install(game, index, engine, filelist,
                   backup_dir=None, skip_backup=False, do_ui=True,
-                  do_fix_sizes=True, quiet=False):
+                  do_fix_sizes=True, quiet=False, overrides=None):
     """Apply the Vietnamese patch to an install.
 
     Returns a results dict with keys:
@@ -225,9 +225,12 @@ def patch_install(game, index, engine, filelist,
     if os.path.isfile(tag_path):
         try:
             tag_data = tag_tuning.load(tag_path)
-            tag_changed = tag_tuning.write_to_game(game, tag_data, index)
+            tag_changed, tag_stamped = tag_tuning.write_to_game(
+                game, tag_data, index, overrides=overrides)
             if tag_changed:
                 log(f"  tags: wrote {len(tag_changed)} tuned tag table(s)")
+            if tag_stamped:
+                log(f"  tags: applied {tag_stamped} manual override range(s)")
         except Exception as e:
             log(f"  tags: tag_tuning.json skipped ({e})")
     else:
