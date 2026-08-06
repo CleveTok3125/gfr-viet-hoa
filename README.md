@@ -34,6 +34,7 @@ counterparts, so no English voice/story lock is lost.
 ```
 translations.json      EN -> VI table (source of truth)
 rules.json             stat_map + node-transform rules
+TRANSLATION_NOTES.md   translation rules
 decisions.json         highlight decisions, phrase form (written by tr_edit)
 filelist.txt.gz        internal file paths (hash -> path), under data/
 fonts.zip              Vietnamese font overrides (data/font/*), under data/
@@ -218,6 +219,8 @@ tables (`data/system/table/scenario/ko/*`). Scenario dialogue is based on the
 base-game translation by **TheRedTeam** (before the Endless Ragnarok DLC);
 see `meta.credits` in `translations.json`.
 
+Follow the rules in `TRANSLATION_NOTES.md` when translating
+
 ### Editing with the TUI editor (`tr_edit`)
 
 `src/tr_edit.py` is a full-screen editor (built on `textual`) for browsing
@@ -249,17 +252,29 @@ Keys:
 - Esc — back to the item list
 - PageUp/PageDown — scroll the focused preview/legend panel
 - F4 — toggle the EN preview between plain text and the game's highlight
-  markers (`{c:}`/`{w:}`/`{b:}`), to see which substrings the engine highlights
+  markers (`{c:}`/`{w:}`/`{b:}` plus the `{p}` player-name insertion point),
+  to see which substrings the engine highlights
 - F3 — auto-wrap the current editor text to the EN wrap width (the
   `EN wrap Nch` number shown in the stats): all existing line breaks are first
   joined into one flow, then the text is re-wrapped; highlight markers are kept
   intact and never split across lines
-- Ctrl+T / Ctrl+G / Ctrl+O — copy VN (plain) / EN / compound to clipboard
+- Ctrl+T / Ctrl+J / Ctrl+G / Ctrl+O — copy VN (plain) / raw Japanese / EN /
+  compound to clipboard
 - Ctrl+M / Ctrl+H — copy item summary / debug dump
+- Ctrl+Up / Ctrl+Down — previous / next item (wraps around; the editor
+  refuses to move away with unsaved changes)
+- F2 — open a dialog to configure a regex search & replace rule for the
+  session (pattern, replacement, match-case / whole-word options); it shows a
+  live count and a live preview of the resulting text as you type, and the
+  dialog closes when saved, keeping the rule in memory
+- F5 — apply the saved F2 rule to the text of the item currently open in the
+  editor, immediately; markers stay aligned (phrases that disappear are
+  reported as warnings). The change is not written until you press Ctrl+S.
 - Ctrl+Q — quit
 
 The preview panel highlights the current search query inside the plain VN text
-(reverse video), and the legend explains every marker. Both panels scroll
+(reverse video), shows the original Japanese (`JA (raw)`) below it for
+kanji-exact reference, and the legend explains every marker. Both panels scroll
 independently.
 
 Marker conventions (self-defined; `tag_tuning.json` is intentionally left
@@ -294,34 +309,43 @@ else is installed via pip.
 
 1. Get the newest game build (e.g. update via Steam).
 2. Refresh the bundled file list from GBFRDataTools:
+
    ```bash
    python3 update_filelist.py
    ```
+
    (This downloads `filelist.txt` from the upstream GBFRDataTools project and
    packs it into `data/filelist.txt.gz`; you can also point `apply.py` at an
    external copy with `GBFR_FILELIST=/path/to/filelist.txt` instead.)
 3. Diff the English sources of the new build against the table:
+
    ```bash
    python3 updater.py --game "/path/to/new/install"
    ```
+
    This writes `translations_new.json` (exact + auto-accepted fuzzy) and
    `review.txt`. Strings marked `[NEW]` need a human translation; `[REVIEW]`
    and `[ACCEPTED]` should be eyeballed.
 4. Translate the `[NEW]` strings into `translations_new.json` (follow the
    existing style; keep proper nouns, `{0}` placeholders, and `<d>` codes).
 5. Promote the reviewed table:
+
    ```bash
    mv translations_new.json translations.json
    ```
+
    (If you prefer, edit `translations.json` directly instead of step 3-5.)
 6. Sanity-check against the new build:
+
    ```bash
    python3 apply.py --game "/path/to/new/install"
    ```
+
    Expect `Build check: WARNING` to disappear only after `build_fingerprint`
    matches the new build; if you rebuilt `translations.json` with
    `rebuild_translations.py`, the fingerprint is updated automatically.
 7. Remap the dialogue highlight offsets to the new text and re-verify:
+
    ```bash
    python3 -m src.remap_tags --all --game "/path/to/new/install" \
        --report /tmp/tag_review.json
@@ -330,6 +354,7 @@ else is installed via pip.
        --overrides tag_overrides.json --fix-sizes
    python3 verify.py --game "/path/to/new/install" --gen
    ```
+
    The first `remap_tags` pass reports every range it could not resolve
    exactly; `tag_review` walks you through them and fills in
    `tag_overrides.json`; the second `remap_tags` pass applies both the
@@ -343,18 +368,22 @@ else is installed via pip.
    entry of `tag_overrides.json` onto the recreated tag tables during
    patching.
 8. Ship it: commit, then
+
    ```bash
    python3 build_patch.py --game "/path/to/new/install" --out gbfr_vietnam.zip
    ```
+
    and upload the zip as a release.
 
 ### Rebuilding the table from scratch (not normally needed)
 
 If `translations.json` is lost or you want to regenerate it from an install
 that already has the Vietnamese patch applied:
+
 ```bash
 python3 rebuild_translations.py --game "/path/to/patched/install"
 ```
+
 It diffs the English sources (extracted from `data.i`) against the installed
 `ko/` tables and regenerates `translations.json` (with a fresh
 `build_fingerprint`).
