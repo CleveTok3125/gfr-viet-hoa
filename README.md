@@ -132,6 +132,15 @@ is the single source of truth: `apply.py` writes every tag table from this
 file during patching and fixes the declared `ExternalFileSizes`, so a fresh
 install gets the exact tune without running `remap_tags` by hand.
 
+Manual overrides are applied automatically: when patching, `gfrpatch` /
+`apply.py` also load `tag_overrides.json`. For a row that has an override, the
+override is **authoritative**: it replaces the baked-in tuned spans and any
+tuned span key the override no longer defines is dropped, so stale/overlapping
+highlights cannot linger behind an edit. Element metadata (`color_`,
+`wordID_`, `type_`) is carried over from the tuned span at the same index, so
+glossary links and colors survive. A highlight added in the TUI editor lands in
+the game on the next patch run with no separate `remap_tags --overrides` step.
+
 To (re)create the snapshot from a patched install:
 
 ```bash
@@ -232,11 +241,18 @@ Keys:
 - Ctrl+E — focus the editor
 - Ctrl+S — save the current edit (writes all three JSONs)
 - Ctrl+R — discard the current edit, reload from the saved state
-- Ctrl+F — focus search (EN/VN/ID, case-insensitive, debounced)
+- Ctrl+F — focus search (EN/VN/ID, case-insensitive, debounced, `*`/`?` wildcards)
 - Ctrl+L — focus the file filter (empty = browse all tables)
 - Ctrl+N — next table file
 - Esc — back to the item list
+- PageUp/PageDown — scroll the focused preview/legend panel
+- Ctrl+T / Ctrl+G / Ctrl+O — copy VN (plain) / EN / compound to clipboard
+- Ctrl+M / Ctrl+H — copy item summary / debug dump
 - Ctrl+Q — quit
+
+The preview panel highlights the current search query inside the plain VN text
+(reverse video), and the legend explains every marker. Both panels scroll
+independently.
 
 Marker conventions (self-defined; `tag_tuning.json` is intentionally left
 untouched):
@@ -255,7 +271,10 @@ untouched):
 Highlight decisions are stored in phrase form in `decisions.json` (VN phrase
 per row id). `src/apply_decisions.py` expands them into the positional
 `tag_overrides.json` ranges against an installed copy of the game; the editor
-keeps both files in sync on every save.
+keeps both files in sync on every save. Highlights that exist only in the
+game's tuned tag tables (never recorded in decisions/overrides) are also shown
+in the editor so they can be reviewed and edited; once a row has an override,
+that override is authoritative for its highlights.
 
 ## Operating this project (handover guide)
 
@@ -311,6 +330,10 @@ else is installed via pip.
    game otherwise rejects tag tables whose size no longer matches). Without
    this, name highlights and voice/text sync would drift from the dialogue,
    and the engine would render literal `<d>` markers.
+   For **incremental** manual highlights added later in the TUI editor, this
+   full remap pass is not needed: `apply.py` / `gfrpatch` already stamp every
+   entry of `tag_overrides.json` onto the recreated tag tables during
+   patching.
 8. Ship it: commit, then
    ```bash
    python3 build_patch.py --game "/path/to/new/install" --out gbfr_vietnam.zip

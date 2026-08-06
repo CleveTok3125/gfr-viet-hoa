@@ -1,5 +1,38 @@
 # Changelog
 
+## v0.5.7 - editor UX, authoritative overrides & Conflux translation (2026-08-06)
+
+- **`tag_overrides.json` is authoritative for edited rows.** A highlight range
+  saved from the editor replaces the baked-in tuned span for that row, and any
+  tuned span key the override no longer defines is dropped instead of lingering
+  behind it — no more stale/overlapping highlights. Element metadata
+  (`color_`, `wordID_`, `type_`) is carried over from the tuned span at the
+  same index, so glossary links and colors survive.
+  `src/tag_tuning._apply_overrides` implements the replacement; the editor's
+  `_load_markers` stops resurrecting tuned spans for a row that has an override.
+- **TUI editor UX.** Longer search debounce (0.6s) so the list only refreshes
+  after you stop typing; preview & legend are scrollable panels
+  (`ScrollableContainer`, PageUp/PageDown/scroll wheel) with visible
+  scrollbars; tuned-game highlights that were never edited now show up in the
+  editor instead of being hidden behind stale ranges.
+- **Translation report.** Terminology unified (`Skyfarer` → `Phi Hành Giả`,
+  `skydweller` → `cư dân bầu trời`), glossary entries `Wedge`/`Pseudo-Wedge`
+  gained TL notes explaining the meaning, the **Into the Conflux** chapter
+  dialogue (`text_scenario_720`) was revised (address term, name formatting,
+  clearer phrasing), and other glossary/profile strings were polished.
+  `data/release_manifest.json` regenerated for the changed tables.
+
+## v0.5.6 - manual tag overrides flow through the patcher (2026-08-06)
+
+- **`tag_overrides.json` now flows through `gfrpatch`/`apply.py`.** The
+  manual highlight ranges added in the TUI editor are stamped onto the
+  `*_tag.msg` tables when the patcher recreates them from `tag_tuning.json`,
+  so a fresh install (or a re-apply) picks up every manual override
+  automatically - no separate `remap_tags --overrides` run needed.
+  `src/tag_tuning._apply_overrides` merges ranges by `id_`, extending the
+  tag set when an override points past the current span list (e.g. an added
+  player-name placeholder), and the stamp count is reported by the patcher.
+
 ## v0.5.5 - interactive editor for text & markers (2026-08-05)
 
 - **New TUI editor.** `src/tr_edit.py` (built on `textual`; the only tool in
