@@ -130,15 +130,84 @@ def merge(existing, fresh):
     return existing
 
 
-def write_to_game(game_dir, data, index_path=None):
-    """Write every tag table in `data` to the ko/ dirs, returning changed rels."""
+SPAN_KEYS = ("bolds_", "colors_", "words_", "names_")
+
+
+def _apply_overrides(entries, overrides, base):
+    """Apply manual VN ranges from `overrides` onto `entries` in place.
+
+    `overrides` is the tag_overrides.json shape
+    {base: {rid: {tag_key: {item_idx: [start, end]}}}}.
+
+    For any rid present in `overrides`, the override is the sole authority for
+    the span keys it defines: its ranges replace the baked-in tuned spans, and
+    any tuned span key the override does not define is dropped (the rid was
+    hand-edited, so tag_tuning no longer applies to it). Element metadata
+    (``color_``/``wordID_``/``type_``) is carried over from the old tuned span
+    at the same index when available, so glossary links and colors survive.
+
+    Returns the count of ranges stamped or dropped.
+    """
+    if not overrides:
+        return 0
+    file_over = overrides.get(base) or {}
+    if not file_over:
+        return 0
+    n_stamped = 0
+    # entries keyed by "id::subid"; override rid keys on the entry id_ only.
+    for _, rec in entries.items():
+        rid = rec.get("id_", "")
+        id_over = file_over.get(rid)
+        if not id_over:
+            continue
+        for k in SPAN_KEYS:
+            kmap = id_over.get(k)
+            old_spans = rec.get(k, [])
+            if kmap is None:
+                # rid was edited but this key has no override -> drop tuned
+                rec.pop(k, None)
+                if old_spans:
+                    n_stamped += len(old_spans)
+                continue
+            if not kmap:
+                # Empty dict = tombstone: user removed this highlight entirely.
+                rec.pop(k, None)
+                n_stamped += 1
+                continue
+            new_spans = []
+            for idx, (ns, ne) in kmap.items():
+                idx = int(idx)
+                meta = {}
+                if idx < len(old_spans):
+                    old = old_spans[idx].get("Element", old_spans[idx])
+                    meta = {m: v for m, v in old.items()
+                            if m not in ("start_", "end_")}
+                elem = dict(meta)
+                elem["start_"] = str(int(ns))
+                elem["end_"] = str(int(ne))
+                new_spans.append({"Element": elem})
+                n_stamped += 1
+            rec[k] = new_spans
+    return n_stamped
+
+
+def write_to_game(game_dir, data, index_path=None, overrides=None):
+    """Write every tag table in `data` to the ko/ dirs.
+
+    When `overrides` (tag_overrides.json, see _apply_overrides) is given, the
+    manual highlight VN ranges are stamped onto the entries before writing.
+    Returns a tuple ``(changed_rels, n_stamped)``: the game-relative paths of
+    the tag tables written and the number of manual ranges stamped.
+    """
     import datai
 
     changed = []
+    total_stamped = 0
     for base, entries in (data.get("files") or {}).items():
         kind = _dir_of(game_dir, data, base)
         if kind is None:
             continue
+        total_stamped += _apply_overrides(entries, overrides, base)
         rel_dir = f"system/table/{kind}/ko/"
         path = os.path.join(game_dir, "data", rel_dir, base + "_tag.msg")
         os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -157,7 +226,7 @@ def write_to_game(game_dir, data, index_path=None):
 
     if index_path and changed:
         datai.fix_sizes(game_dir, index_path, changed)
-    return changed
+    return (changed, total_stamped)
 
 
 def main():
@@ -195,7 +264,7 @@ def main():
         from common import find_game_dir
         game = args.game or find_game_dir()
         index_path = os.path.join(game, "data.i")
-        changed = write_to_game(game, data, index_path)
+        changed, _stamped = write_to_game(game, data, index_path)
         print(f"wrote {len(changed)} tag file(s) to game, sizes fixed")
 
 
