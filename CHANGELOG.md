@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.5.8 - translation polish for the Eternals arc (2026-08-06)
+
+- **Eternals arc scenes rewritten.** Dialogue quality improved across the
+  chapters **A Trial of Two Eternities**, **Ragnalia, the Heralds of Doom**
+  and **Becoming Fatebreakers** (`text_scenario_720` + chapter summaries in
+  `text_story`): address terms between the Eternals and the crew, punctuation,
+  line-break balance and phrasing were reworked; highlight ranges
+  (`tag_overrides.json`) updated to match, and `data/release_manifest.json`
+  regenerated for the touched tables.
+
 ## v0.5.7 - editor UX, authoritative overrides & Conflux translation (2026-08-06)
 
 - **`tag_overrides.json` is authoritative for edited rows.** A highlight range
