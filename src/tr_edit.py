@@ -17,6 +17,7 @@ Keys:
     Ctrl+F            focus search box (EN/VN/ID, case-insensitive)
     Ctrl+L            focus file filter (table basename)
     Ctrl+N            next table file
+    Ctrl+T/G/O/M/H    copy VN / EN / compound / item info / debug
     Esc               back to the item list
     Ctrl+Q            quit
 """
@@ -34,7 +35,7 @@ from textual.app import App, ComposeResult  # noqa: E402
 from textual.binding import Binding  # noqa: E402
 from textual.widgets import (  # noqa: E402
     DataTable, Footer, Header, Input, Static, TextArea)
-from textual.containers import Horizontal, Vertical  # noqa: E402
+from textual.containers import Horizontal, ScrollableContainer, Vertical  # noqa: E402
 from textual import on  # noqa: E402
 
 from common import bootstrap  # noqa: E402
@@ -56,7 +57,14 @@ LEGEND = (
     "\n"
     "[b]Escapes[/b]  \\{  \\}  \\\\  to show a literal brace / backslash\n"
     "[b]Save[/b]     Ctrl+S writes translations / decisions / overrides\n"
-    "[b]Speaker[/b]  auto-prefix; edit text without it, it is re-added"
+    "[b]Speaker[/b]  auto-prefix; edit text without it, it is re-added\n"
+    "\n"
+    "[b]Copy[/b]\n"
+    "Ctrl+T   plain VN (markers stripped)\n"
+    "Ctrl+G   EN (original text)\n"
+    "Ctrl+O   compound as in the editor (with markers)\n"
+    "Ctrl+M   item info (file / id / speaker / EN / VN)\n"
+    "Ctrl+H   full debug dump (ids, speaker, markers, decisions/overrides)"
 )
 
 
@@ -89,23 +97,39 @@ class TrEditApp(App):
     .pane-left {
         width: 33%;
     }
-    #preview {
+    #preview_sc {
         height: 1fr;
         border: round $primary;
         padding: 0 1;
         overflow-y: auto;
+        scrollbar-gutter: stable;
+        scrollbar-size: 1 1;
+        scrollbar-color: $accent;
+        scrollbar-background: $panel;
+    }
+    #preview {
+        width: 1fr;
+        height: auto;
     }
     #hint {
         height: 1;
         color: $text-muted;
         padding: 0 1;
     }
-    #legend {
+    #legend_sc {
         height: 1fr;
         border: round $secondary;
         padding: 0 1;
         overflow-y: auto;
+        scrollbar-gutter: stable;
+        scrollbar-size: 1 1;
+        scrollbar-color: $accent;
+        scrollbar-background: $panel;
         color: $text-muted;
+    }
+    #legend {
+        width: 1fr;
+        height: auto;
     }
     #table {
         height: 1fr;
@@ -135,6 +159,13 @@ class TrEditApp(App):
         Binding("ctrl+l", "focus_file", "File", show=True),
         Binding("ctrl+n", "next_file", "Next file", show=True),
         Binding("escape", "focus_table", "List", show=True),
+        Binding("pagedown", "scroll_panel_down", "Panel dn", show=False),
+        Binding("pageup", "scroll_panel_up", "Panel up", show=False),
+        Binding("ctrl+t", "copy_vn", "Copy VN", show=False),
+        Binding("ctrl+g", "copy_en", "Copy EN", show=False),
+        Binding("ctrl+o", "copy_compound", "Copy cmpnd", show=False),
+        Binding("ctrl+m", "copy_item", "Copy item", show=False),
+        Binding("ctrl+h", "copy_debug", "Copy debug", show=False),
         Binding("ctrl+q", "quit", "Quit", show=False),
     ]
 
@@ -153,6 +184,7 @@ class TrEditApp(App):
         self.current_item = None   # Item currently in the editor
         self.dirty = False
         self._loaded = None        # last programmatic editor text
+        self._suppress_highlight = False  # set during refresh's own selection
 
     # -- composition -------------------------------------------------------
 
@@ -160,15 +192,17 @@ class TrEditApp(App):
         yield Header()
         with Vertical():
             with Horizontal(classes="filters"):
-                yield Input(placeholder="search EN / VN / ID (case-insensitive)",
+                yield Input(placeholder="search EN / VN / ID (* ? wildcards)",
                             id="search")
                 yield Input(placeholder="file base (e.g. text_scenario_030)",
                             value=self.base, id="file")
             with Horizontal(classes="main"):
                 with Vertical(classes="pane pane-left"):
-                    yield Static("", id="preview")
+                    with ScrollableContainer(id="preview_sc"):
+                        yield Static("(select an item)", id="preview")
                     yield Static("", id="hint")
-                    yield Static(LEGEND, id="legend")
+                    with ScrollableContainer(id="legend_sc"):
+                        yield Static(LEGEND, id="legend")
                 with Vertical(classes="pane"):
                     yield DataTable(id="table", zebra_stripes=True,
                                     cursor_type="row")
@@ -184,6 +218,10 @@ class TrEditApp(App):
         table.add_column("ID", key="id", width=22)
         table.add_column("SPK", key="spk", width=14)
         table.add_column("EN", key="en")
+        # make the preview/legend scroll containers focusable so PageUp/
+        # PageDown/arrows/mouse-wheel scroll them (they are by default)
+        self.query_one("#preview_sc", ScrollableContainer).can_focus = True
+        self.query_one("#legend_sc", ScrollableContainer).can_focus = True
         self.refresh_table()
 
     # -- table population --------------------------------------------------
@@ -219,7 +257,9 @@ class TrEditApp(App):
                           en_line, key=(it.file, it.en))
         # selection: keep the current row while editing (dirty), else pick
         # first / preserved key. RowHighlighted does not re-fire after a
-        # full repopulate, so select + load explicitly.
+        # full repopulate, so select + load explicitly. Guard against the
+        # RowHighlighted that Textual still emits for the old row afterwards.
+        self._suppress_highlight = True
         sel_key = keep_key
         if not sel_key and self.dirty and self.current_key is not None:
             sel_key = (self.current_key[0], self.current_key[1])
@@ -230,7 +270,7 @@ class TrEditApp(App):
                 pass
             if not self.dirty:
                 self.load_item(self.rows_by_key[sel_key[0] + "\u0000"
-                                               + sel_key[1]])
+                                                + sel_key[1]])
         elif found:
             table.move_cursor(row=0)
             self.current_key = None
@@ -245,6 +285,9 @@ class TrEditApp(App):
             self.dirty = False
             self.update_editor_stats()
         self.set_hint()
+        # clear the suppression on the next frame (synthetic RowHighlighted
+        # for the old row is emitted in the same message batch)
+        self.set_timer(0.1, lambda: setattr(self, "_suppress_highlight", False))
 
     def set_hint(self) -> None:
         n = len(self.items)
@@ -260,6 +303,9 @@ class TrEditApp(App):
         table = self.query_one("#table", DataTable)
         if event.row_key is None or event.row_key.value is None:
             return
+        if self._suppress_highlight:
+            self._suppress_highlight = False
+            return
         key = event.row_key.value
         item = self.rows_by_key.get(key[0] + "\u0000" + key[1])
         if item is None:
@@ -273,6 +319,13 @@ class TrEditApp(App):
             except Exception:
                 pass
             return
+        # A RowHighlighted can re-fire for the already-loaded row (e.g. after
+        # the editor text is set programmatically), which would reload the old
+        # item over the current one. Skip when it is the same item.
+        if (self.current_key is not None
+                and key[0] == self.current_key[0]
+                and key[1] == self.current_key[1]):
+            return
         self.load_item(item)
 
     def load_item(self, item) -> None:
@@ -280,9 +333,10 @@ class TrEditApp(App):
         self.current_item = item
         ids = ", ".join(item.ids) or "(no id)"
         prev = (f"[b]{item.file}[/b]  {ids}\n"
-                f"[b]EN:[/b]\n{item.en}\n"
-                f"[b]VN (plain):[/b]\n{item.vn}")
+                f"[b]EN:[/b]\n{self._rich_esc(item.en)}\n"
+                f"[b]VN (plain):[/b]\n{self._highlight_vn(item.vn)}")
         self.query_one("#preview", Static).update(prev)
+        self._remeasure_panel("preview_sc")
         spk = item.speaker or "(none)"
         self.query_one("#editor_head", Static).update(
             f"[b]Speaker:[/b] {spk}   [b](read-only, not counted)[/b]")
@@ -293,6 +347,66 @@ class TrEditApp(App):
         self._loaded = editor.text
         self.dirty = False
         self.update_editor_stats()
+
+    def _rich_esc(self, s: str) -> str:
+        """Escape rich-markup metacharacters in ``s`` for a Static.update.
+
+        A literal ``[`` must be written as ``\\[`` (otherwise sequences like
+        ``[b]`` inside dialogue are consumed as markup tags); ``]`` is safe
+        on its own in Rich 15.
+        """
+        return s.replace("[", "\\[")
+
+    def _remeasure_panel(self, container_id: str) -> None:
+        """Force the scroll container to re-measure its content.
+
+        Textual caches content height by width; an update issued during the
+        mount layout pass can capture a stale (too small) height that never
+        refreshes, so the panel cannot be scrolled. Invalidating the cached
+        dimensions on the next frame makes the container pick up the real
+        content height.
+        """
+        container = self.query_one(f"#{container_id}", ScrollableContainer)
+        child = self.query_one("#preview", Static) if container_id == "preview_sc" \
+            else self.query_one("#legend", Static)
+
+        def _invalidate() -> None:
+            child.clear_cached_dimensions()
+            container.clear_cached_dimensions()
+            container.refresh(repaint=True, layout=True)
+
+        self.set_timer(0.1, _invalidate)
+
+    def _highlight_vn(self, vn: str) -> str:
+        """Render ``vn`` with search query matches wrapped in reverse video."""
+        q = self.query_one("#search", Input).value.strip()
+        if not q:
+            return self._rich_esc(vn)
+        from tr_edit_core import _WILDCARD_RE, _wildcard_regex
+        if _WILDCARD_RE.search(q):
+            rx = _wildcard_regex(q)
+            spans = [(m.start(), m.end()) for m in rx.finditer(vn)]
+        else:
+            ql = q.lower()
+            vl = vn.lower()
+            spans = []
+            i = 0
+            while True:
+                i = vl.find(ql, i)
+                if i < 0:
+                    break
+                spans.append((i, i + len(q)))
+                i += len(q)
+        if not spans:
+            return self._rich_esc(vn)
+        out = []
+        cur = 0
+        for s, e in spans:
+            out.append(self._rich_esc(vn[cur:s]))
+            out.append(f"[reverse]{self._rich_esc(vn[s:e])}[/reverse]")
+            cur = e
+        out.append(self._rich_esc(vn[cur:]))
+        return "".join(out)
 
     @on(TextArea.Changed)
     def on_edit(self, event) -> None:
@@ -357,8 +471,106 @@ class TrEditApp(App):
         self.update_editor_stats()
         self.notify("Reloaded saved compound string")
 
+    # -- copy to clipboard -------------------------------------------------
+
+    def _clip(self, label: str, text: str) -> None:
+        if not text:
+            self.notify(f"Nothing to copy ({label})", severity="warning")
+            return
+        self.copy_to_clipboard(text)
+        first = next((ln.strip() for ln in text.split("\n") if ln.strip()),
+                     "")
+        if len(first) > 42:
+            first = first[:41] + "…"
+        self.notify(f"[b]{label}[/b] copied" + (f": {first}" if first else ""))
+
+    def action_copy_vn(self) -> None:
+        if self.current_item is None:
+            return
+        editor = self.query_one("#editor", TextArea)
+        _speaker, vn, _hl, _pp = parse_compound(editor.text)
+        self._clip("VN (plain)", vn)
+
+    def action_copy_en(self) -> None:
+        if self.current_item is None:
+            return
+        self._clip("EN", self.current_item.en)
+
+    def action_copy_compound(self) -> None:
+        if self.current_item is None:
+            return
+        self._clip("Compound", self.query_one("#editor", TextArea).text)
+
+    def action_copy_item(self) -> None:
+        if self.current_item is None:
+            return
+        it = self.current_item
+        parts = [
+            f"FILE  : {it.file}",
+            f"ID    : {', '.join(it.ids) or '(no id)'}",
+            f"SPEAKER: {it.speaker or '(none)'}",
+            "EN:",
+            it.en,
+            "VN:",
+            it.vn,
+        ]
+        self._clip("Item", "\n".join(parts))
+
+    def action_copy_debug(self) -> None:
+        if self.current_item is None:
+            return
+        import json as _json
+        it = self.current_item
+        store = self.store
+        base = it.file[:-len(".msg")]
+        editor = self.query_one("#editor", TextArea)
+        spk, vn, highlights, player_pos = parse_compound(editor.text)
+        speaker_records = {}
+        for rid in it.ids:
+            rec = store.speakers.get(rid)
+            if rec:
+                speaker_records[rid] = dict(rec)
+        decisions = {rid: store.decisions.get(base, {}).get(rid)
+                     for rid in it.ids}
+        decisions = {k: v for k, v in decisions.items() if v}
+        overrides = {rid: store.overrides.get(base, {}).get(rid)
+                     for rid in it.ids}
+        overrides = {k: v for k, v in overrides.items() if v}
+        parts = [
+            f"FILE      : {it.file}",
+            f"BASE      : {base}",
+            f"IDS       : {', '.join(it.ids) or '(no id)'}",
+            f"SPEAKER   : {spk or it.speaker or '(none)'}",
+            "SPEAKERS  : "
+            + _json.dumps(speaker_records, ensure_ascii=False),
+            "EN        : " + _json.dumps(it.en, ensure_ascii=False),
+            "VN (plain): " + _json.dumps(vn, ensure_ascii=False),
+            "COMPOUND  : " + _json.dumps(editor.text, ensure_ascii=False),
+            "HIGHLIGHTS: "
+            + _json.dumps(highlights, ensure_ascii=False),
+            "PLAYER_POS: " + _json.dumps(player_pos),
+            "DECISIONS : "
+            + _json.dumps(decisions, ensure_ascii=False),
+            "OVERRIDES : "
+            + _json.dumps(overrides, ensure_ascii=False),
+        ]
+        self._clip("Debug", "\n".join(parts))
+
     def action_focus_editor(self) -> None:
         self.query_one("#editor", TextArea).focus()
+
+    def _scroll_panel(self, delta: int) -> None:
+        """Scroll the focused preview/legend panel by ``delta`` lines."""
+        focused = self.screen.focused
+        if focused is None or focused.id not in ("preview_sc", "legend_sc"):
+            return
+        focused.scroll_relative(y=delta)
+
+    def action_scroll_panel_down(self) -> None:
+        self._scroll_panel(1)
+
+    def action_scroll_panel_up(self) -> None:
+        self._scroll_panel(-1)
 
     def action_focus_search(self) -> None:
         self.query_one("#search", Input).focus()
@@ -367,6 +579,13 @@ class TrEditApp(App):
         self.query_one("#file", Input).focus()
 
     def action_focus_table(self) -> None:
+        search = self.query_one("#search", Input)
+        if self.screen.focused is search and search.value:
+            search.value = ""
+            if not self.dirty:
+                self.current_key = None
+            self.refresh_table()
+            return
         self.query_one("#table", DataTable).focus()
 
     def action_next_file(self) -> None:
@@ -384,10 +603,12 @@ class TrEditApp(App):
 
     @on(Input.Changed, "#search")
     def on_search(self, _event: Input.Changed) -> None:
-        # debounced search: refresh only after the user pauses typing
+        # debounced search: refresh only after the user stops typing. A longer
+        # delay avoids firing while the user is still hunting for characters
+        # (slow typing with pauses longer than the threshold).
         if self._search_timer is not None:
             self._search_timer.stop()
-        self._search_timer = self.set_timer(0.3, self._debounced_search)
+        self._search_timer = self.set_timer(0.6, self._debounced_search)
 
     def _debounced_search(self) -> None:
         if not self.dirty:
