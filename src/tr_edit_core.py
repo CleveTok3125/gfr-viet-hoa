@@ -129,6 +129,55 @@ class Store:
                     return v
         return None
 
+    def en_tag_spans(self, file):
+        """Return EN tag highlight spans for a table.
+
+        Reads the game's ``*_tag.msg`` EN reference (the spans the engine uses
+        to highlight the original English dialogue) and indexes them by
+        ``(id, subid)`` -> ``{key: [(start, end), ...]}``. Values are ints.
+        Result is cached per file.
+        """
+        if not self.game:
+            return {}
+        cache = getattr(self, "_en_tag_cache", None)
+        if cache is None:
+            cache = self._en_tag_cache = {}
+        if file in cache:
+            return cache[file]
+        kind = "scenario" if file.startswith("text_scenario") else "text"
+        rel = f"system/table/{kind}/en/{file[:-len('.msg')]}_tag.msg"
+        raw = self._extract(rel)
+        if not raw:
+            cache[file] = {}
+            return {}
+        out = {}
+        try:
+            blob = msgpack.unpackb(raw, raw=False)
+        except Exception:
+            cache[file] = {}
+            return {}
+        for entry in blob.get("Tag", {}).get("tags_", []):
+            el = entry.get("Element", {})
+            rid = el.get("id_", "")
+            subid = el.get("subid_", "")
+            rec = {}
+            for k in ("bolds_", "colors_", "words_"):
+                items = el.get(k) or []
+                spans = []
+                for it in items:
+                    e = it.get("Element", it)
+                    try:
+                        s, en = int(e["start_"]), int(e["end_"])
+                    except (KeyError, ValueError, TypeError):
+                        continue
+                    spans.append((s, en))
+                if spans:
+                    rec[k] = spans
+            if rec:
+                out[(rid, subid)] = rec
+        cache[file] = out
+        return out
+
     # -- atomic writes -----------------------------------------------------
 
     def save_all(self):
@@ -199,6 +248,12 @@ def iter_items(store, bases=None, holds=None):
 _WILDCARD_RE = re.compile(r"[\*\?]")
 _last_query = None
 _last_re = None
+_SPACE_RE = re.compile(r"\s+")
+
+
+def _norm_ws(s):
+    """Collapse every run of whitespace (incl. newlines) to a single space."""
+    return _SPACE_RE.sub(" ", s)
 
 
 def _wildcard_regex(q):
@@ -230,16 +285,20 @@ def search_hit(store, item, query):
     """Case-insensitive match of ``query`` against original/translation/ids.
 
     ``*`` and ``?`` act as wildcards (any run / any single character);
-    otherwise the match is a plain substring test.
+    otherwise the match is a plain substring test. Whitespace is normalised on
+    both sides, so a query typed with spaces matches text broken across line
+    breaks (``\\n`` is treated like a space).
     """
     if not query:
         return True
     if _WILDCARD_RE.search(query):
-        rx = _wildcard_regex(query)
-        return bool(rx.search(item.en) or rx.search(item.vn)
+        rx = _wildcard_regex(_norm_ws(query))
+        en = _norm_ws(item.en)
+        vn = _norm_ws(item.vn)
+        return bool(rx.search(en) or rx.search(vn)
                     or any(rx.search(rid) for rid in item.ids))
-    q = query.lower()
-    if q in item.en.lower() or q in item.vn.lower():
+    q = _norm_ws(query).lower()
+    if q in _norm_ws(item.en).lower() or q in _norm_ws(item.vn).lower():
         return True
     return any(q in rid.lower() for rid in item.ids)
 
@@ -381,6 +440,134 @@ def build_compound(item, with_speaker=True):
     if item.speaker and with_speaker:
         return f"[{item.speaker}] " + body
     return body
+
+
+def en_compound(store, item):
+    """Render the original EN text with the game's highlight markers.
+
+    The spans come from the EN ``*_tag.msg`` reference (which highlights the
+    original English dialogue) and are wrapped in the same ``{c:}``/``{w:}``/
+    ``{b:}`` markers the editor uses, so a translator sees exactly which
+    substrings the engine highlights and keeps the translation aligned.
+    ``{0}`` placeholders and ``<d>`` codes in the EN text are left intact.
+    """
+    en = item.en
+    if not en or not store.game:
+        return en
+    spans = store.en_tag_spans(item.file)
+    TAG = {"colors_": "c", "words_": "w", "bolds_": "b"}
+    groups = {}              # (start, end) -> set(tags)
+    for rid, subid in ((r, "") for r in item.ids):
+        rec = spans.get((rid, subid))
+        if not rec:
+            continue
+        for key in TAG:
+            for s, e in rec.get(key, []):
+                if 0 <= s <= e <= len(en):
+                    groups.setdefault((s, e), set()).add(TAG[key])
+    edits = []
+    for (s, e), tags in sorted(groups.items()):
+        tag = "".join(sorted(tags))
+        edits.append((s, e, f"{{{tag}:{_esc(en[s:e])}}}"))
+    if not edits:
+        return en
+    out = []
+    cur = 0
+    for s, e, marker in edits:
+        if s < cur:
+            continue
+        # keep game markup ({0}, <d>) and newlines visible as-is
+        out.append(en[cur:s])
+        out.append(marker)
+        cur = e
+    out.append(en[cur:])
+    return "".join(out)
+
+
+def auto_wrap(compound, width):
+    """Reflow a compound string to a maximum line width, keeping markers intact.
+
+    ``compound`` is the editor text (VN with ``{c:}``/``{w:}``/``{b:}`` markers
+    and an optional ``[Speaker]`` prefix). All existing line breaks are first
+    collapsed into single spaces, then the text is wrapped greedily at word
+    boundaries so no line exceeds ``width`` characters. Runs of multiple spaces
+    (e.g. the placeholder used for the player's name) are preserved verbatim.
+    A highlight marker and its phrase are treated as a single atomic token and
+    are never split across lines. The speaker prefix is kept unchanged.
+    """
+    if not compound:
+        return compound
+    speaker = ""
+    body = compound
+    m = SPEAKER_RE.match(body)
+    if m:
+        speaker = body[:m.end()]
+        body = body[m.end():]
+    if width < 1:
+        return compound
+    # tokenize into word/marker atoms; a marker is atomic. Each atom carries
+    # the exact whitespace run that precedes it (newlines become one space).
+    tokens = []   # (leading_spaces, text, is_marker)
+    i = 0
+    for mm in HIGHLIGHT_RE.finditer(body):
+        tokens.extend(_split_plain(body[i:mm.start()]))
+        tokens.append((_trailing_ws(body[i:mm.start()]), mm.group(0), True))
+        i = mm.end()
+    tokens.extend(_split_plain(body[i:]))
+    # greedy wrap: join atoms preserving each one's leading space-run.
+    lines = []
+    cur = None
+    for spaces, text, is_marker in tokens:
+        if cur is None:
+            # first atom on a line: keep a multi-space run (player-name
+            # placeholder / indentation), drop a single separator space.
+            cur = (spaces if len(spaces) > 1 else "") + text
+            continue
+        if len(cur) + len(spaces) + len(text) <= width:
+            cur += spaces + text
+        elif is_marker and len(text) <= width:
+            lines.append(cur)
+            cur = (spaces if len(spaces) > 1 else "") + text
+        else:
+            lines.append(cur)
+            cur = (spaces if len(spaces) > 1 else "") + text
+    if cur is not None:
+        lines.append(cur)
+    # preserve a trailing multi-space run (player-name placeholder) at the end.
+    tm = re.search(r"( {2,})\s*$", body)
+    if tm and lines:
+        lines[-1] += tm.group(1)
+    return speaker + "\n".join(lines)
+
+
+def _split_plain(s):
+    """Return plain-text tokens ``(leading_spaces, word, False)``.
+
+    ``leading_spaces`` is the exact space-run before the word with newlines
+    removed; if the run was only newlines it becomes a single space. Space runs
+    (e.g. the player-name placeholder) are preserved verbatim.
+    """
+    out = []
+    pos = 0
+    for m in re.finditer(r"\S+", s):
+        sp = s[pos:m.start()]
+        sp = sp.replace("\n", "")
+        leading = sp if sp else " "
+        out.append((leading, m.group(0), False))
+        pos = m.end()
+    return out
+
+
+def _trailing_ws(s):
+    """Return the whitespace run at the very end of ``s`` (newlines removed).
+
+    Newlines are dropped; a run that was only newlines becomes a single space.
+    """
+    m = re.search(r"\s+$", s)
+    if not m:
+        return ""
+    sp = m.group(0).replace("\n", "")
+    return sp if sp else " "
 
 
 def parse_compound(text):

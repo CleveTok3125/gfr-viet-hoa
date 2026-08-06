@@ -64,7 +64,17 @@ LEGEND = (
     "Ctrl+G   EN (original text)\n"
     "Ctrl+O   compound as in the editor (with markers)\n"
     "Ctrl+M   item info (file / id / speaker / EN / VN)\n"
-    "Ctrl+H   full debug dump (ids, speaker, markers, decisions/overrides)"
+    "Ctrl+H   full debug dump (ids, speaker, markers, decisions/overrides)\n"
+    "\n"
+    "[b]Preview[/b]\n"
+    "F4        toggle EN preview: plain or with game highlight markers\n"
+    "PgUp/PgDn scroll the focused preview / legend panel\n"
+    "Ctrl+F    search (EN / VN / ID; * ? wildcards; \\n = space)\n"
+    "Esc       clear search text, then back to the list\n"
+    "\n"
+    "[b]Editor[/b]\n"
+    "F3        auto-wrap current text to the EN wrap width\n"
+    "          (joins all lines, re-wraps; markers never split)"
 )
 
 
@@ -166,6 +176,8 @@ class TrEditApp(App):
         Binding("ctrl+o", "copy_compound", "Copy cmpnd", show=False),
         Binding("ctrl+m", "copy_item", "Copy item", show=False),
         Binding("ctrl+h", "copy_debug", "Copy debug", show=False),
+        Binding("f4", "toggle_en_markers", "EN markers", show=False),
+        Binding("f3", "auto_wrap", "Wrap", show=False),
         Binding("ctrl+q", "quit", "Quit", show=False),
     ]
 
@@ -185,6 +197,7 @@ class TrEditApp(App):
         self.dirty = False
         self._loaded = None        # last programmatic editor text
         self._suppress_highlight = False  # set during refresh's own selection
+        self._en_markers = False   # show EN with game highlight markers
 
     # -- composition -------------------------------------------------------
 
@@ -294,7 +307,7 @@ class TrEditApp(App):
         scope = f"{self.base}.msg" if self.base else "all files"
         self.query_one("#hint", Static).update(
             f"{n} item(s) · {scope} · "
-            "Ctrl+S save · Ctrl+R reset · Ctrl+F search")
+            "Ctrl+S save · Ctrl+R reset · Ctrl+F search · F4 EN · F3 wrap")
 
     # -- selection / editor ------------------------------------------------
 
@@ -332,8 +345,13 @@ class TrEditApp(App):
         self.current_key = (item.file, item.en)
         self.current_item = item
         ids = ", ".join(item.ids) or "(no id)"
+        if self._en_markers:
+            from tr_edit_core import en_compound
+            en_view = self._rich_esc(en_compound(self.store, item))
+        else:
+            en_view = self._rich_esc(item.en)
         prev = (f"[b]{item.file}[/b]  {ids}\n"
-                f"[b]EN:[/b]\n{self._rich_esc(item.en)}\n"
+                f"[b]EN{'+' if self._en_markers else ''}:[/b]\n{en_view}\n"
                 f"[b]VN (plain):[/b]\n{self._highlight_vn(item.vn)}")
         self.query_one("#preview", Static).update(prev)
         self._remeasure_panel("preview_sc")
@@ -382,21 +400,22 @@ class TrEditApp(App):
         q = self.query_one("#search", Input).value.strip()
         if not q:
             return self._rich_esc(vn)
-        from tr_edit_core import _WILDCARD_RE, _wildcard_regex
+        from tr_edit_core import _WILDCARD_RE, _wildcard_regex, _norm_ws
+        norm = _norm_ws(vn)
         if _WILDCARD_RE.search(q):
-            rx = _wildcard_regex(q)
-            spans = [(m.start(), m.end()) for m in rx.finditer(vn)]
+            rx = _wildcard_regex(_norm_ws(q))
+            spans = [(m.start(), m.end()) for m in rx.finditer(norm)]
         else:
-            ql = q.lower()
-            vl = vn.lower()
+            qn = _norm_ws(q).lower()
+            nl = norm.lower()
             spans = []
             i = 0
             while True:
-                i = vl.find(ql, i)
+                i = nl.find(qn, i)
                 if i < 0:
                     break
-                spans.append((i, i + len(q)))
-                i += len(q)
+                spans.append((i, i + len(qn)))
+                i += len(qn)
         if not spans:
             return self._rich_esc(vn)
         out = []
@@ -495,6 +514,31 @@ class TrEditApp(App):
         if self.current_item is None:
             return
         self._clip("EN", self.current_item.en)
+
+    def action_toggle_en_markers(self) -> None:
+        """Toggle the EN preview between plain text and game-highlight markers."""
+        self._en_markers = not self._en_markers
+        if self.current_item is not None:
+            self.load_item(self.current_item)
+        self.notify("EN markers " + ("on" if self._en_markers else "off"),
+                    timeout=2)
+
+    def action_auto_wrap(self) -> None:
+        """Reflow the current editor text to the EN wrap width."""
+        if self.current_item is None:
+            self.notify("No item selected", severity="warning")
+            return
+        from tr_edit_core import auto_wrap
+        editor = self.query_one("#editor", TextArea)
+        width = max((len(line) for line in self.current_item.en.split("\n")),
+                    default=0)
+        if width < 1:
+            return
+        editor.text = auto_wrap(editor.text, width)
+        self._loaded = editor.text
+        self.dirty = False
+        self.update_editor_stats()
+        self.notify(f"Auto-wrapped to {width}ch", timeout=2)
 
     def action_copy_compound(self) -> None:
         if self.current_item is None:
