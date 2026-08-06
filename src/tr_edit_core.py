@@ -119,6 +119,39 @@ class Store:
             return None
         return extract(self.game, rel)
 
+    def ja_text(self, file, ids):
+        """Return the original Japanese text for the first matching id.
+
+        Reads the game's ``jp/*.msg`` table (the raw Japanese source) and maps
+        rows by ``id_hash_``, matching the EN reference ids. Result is cached
+        per file. Returns ``None`` when unavailable.
+        """
+        if not self.game or not ids:
+            return None
+        cache = getattr(self, "_ja_cache", None)
+        if cache is None:
+            cache = self._ja_cache = {}
+        if file not in cache:
+            kind = "scenario" if file.startswith("text_scenario") else "text"
+            raw = self._extract(f"system/table/{kind}/jp/{file}")
+            m = {}
+            if raw:
+                try:
+                    rows = msgpack.unpackb(raw, raw=False)["rows_"]
+                except Exception:
+                    rows = []
+                for r in rows:
+                    c = r.get("column_", {})
+                    hid = c.get("id_hash_", "")
+                    tx = c.get("text_", "")
+                    if hid and tx:
+                        m[hid] = tx
+            cache[file] = m
+        for rid in ids:
+            if rid in cache[file]:
+                return cache[file][rid]
+        return None
+
     def speaker_label(self, ids):
         """Best display name for the first non-empty speaker among ids."""
         for rid in ids:
@@ -161,7 +194,7 @@ class Store:
             rid = el.get("id_", "")
             subid = el.get("subid_", "")
             rec = {}
-            for k in ("bolds_", "colors_", "words_"):
+            for k in ("bolds_", "colors_", "words_", "names_"):
                 items = el.get(k) or []
                 spans = []
                 for it in items:
@@ -458,7 +491,8 @@ def en_compound(store, item):
     original English dialogue) and are wrapped in the same ``{c:}``/``{w:}``/
     ``{b:}`` markers the editor uses, so a translator sees exactly which
     substrings the engine highlights and keeps the translation aligned.
-    ``{0}`` placeholders and ``<d>`` codes in the EN text are left intact.
+    A ``{p}`` marker is inserted at the player-name insertion point
+    (``names_``). ``{0}`` placeholders and ``<d>`` codes stay intact.
     """
     en = item.en
     if not en or not store.game:
@@ -466,6 +500,7 @@ def en_compound(store, item):
     spans = store.en_tag_spans(item.file)
     TAG = {"colors_": "c", "words_": "w", "bolds_": "b"}
     groups = {}              # (start, end) -> set(tags)
+    player_pos = None
     for rid, subid in ((r, "") for r in item.ids):
         rec = spans.get((rid, subid))
         if not rec:
@@ -474,22 +509,38 @@ def en_compound(store, item):
             for s, e in rec.get(key, []):
                 if 0 <= s <= e <= len(en):
                     groups.setdefault((s, e), set()).add(TAG[key])
+        for s, e in rec.get("names_", []):
+            if 0 <= s <= len(en):
+                player_pos = s
+                break
     edits = []
     for (s, e), tags in sorted(groups.items()):
         tag = "".join(sorted(tags))
         edits.append((s, e, f"{{{tag}:{_esc(en[s:e])}}}"))
-    if not edits:
-        return en
+    edits.sort(key=lambda x: x[0])
     out = []
     cur = 0
+    p_done = player_pos is None
     for s, e, marker in edits:
         if s < cur:
             continue
-        # keep game markup ({0}, <d>) and newlines visible as-is
-        out.append(en[cur:s])
+        seg = en[cur:s]
+        if not p_done and player_pos is not None and cur <= player_pos <= s:
+            rel = player_pos - cur
+            out.append(seg[:rel])
+            out.append("{p}")
+            out.append(seg[rel:])
+            p_done = True
+        else:
+            out.append(seg)
         out.append(marker)
         cur = e
-    out.append(en[cur:])
+    tail = en[cur:]
+    if not p_done and player_pos is not None:
+        rel = min(len(tail), player_pos - cur)
+        out.append(tail[:rel] + "{p}" + tail[rel:])
+    else:
+        out.append(tail)
     return "".join(out)
 
 
@@ -701,6 +752,62 @@ def apply_edit(store, item, compound):
     item.markers, item.player_pos = _load_markers(
         store, item.file, item.ids, vn)
     return warnings
+
+
+def replace_in_compound(compound, regex, repl):
+    """Apply a regex substitution to the VN portion of a compound string.
+
+    ``compound`` is the editor text (VN with inline ``{c:}``/``{w:}``/``{b:}``
+    markers, an optional ``[Speaker]`` prefix and ``{p}`` player point). Only
+    the plain VN is rewritten; markers whose phrase still exists in the new
+    text are re-anchored (positions recomputed from the phrase), while markers
+    whose phrase disappeared are dropped and reported as warnings. Returns
+    ``(new_compound, n_subs, warnings)``; if nothing matched the input is
+    returned unchanged.
+    """
+    speaker, vn, highlights, player_pos = parse_compound(compound)
+    new_vn, n_subs = regex.subn(repl, vn)
+    if n_subs == 0:
+        return compound, 0, []
+    warnings = []
+    kept = []
+    for tag, phrase in highlights:
+        if phrase in new_vn:
+            kept.append((tag, phrase))
+        else:
+            warnings.append(f"dropped marker {tag}:{phrase!r}")
+    ppos = player_pos if player_pos is not None and player_pos <= len(new_vn) \
+        else None
+
+    class _Tmp:
+        __slots__ = ("vn", "markers", "player_pos", "speaker")
+    tmp = _Tmp()
+    tmp.vn = new_vn
+    tmp.markers = kept
+    tmp.player_pos = ppos
+    tmp.speaker = speaker
+    return build_compound(tmp, with_speaker=True), n_subs, warnings
+
+
+def apply_text_replace(store, item, regex, repl):
+    """Apply a regex substitution to the VN translation, re-anchoring markers.
+
+    ``regex`` is a compiled :class:`re.Pattern`, ``repl`` the replacement
+    string (backreferences ``\\1`` etc. are supported). Only the plain VN
+    text is rewritten; highlight markers whose phrase still exists in the
+    new text are re-anchored (positions recomputed from the phrase), while
+    markers whose phrase disappeared are dropped and reported as warnings.
+    The player-name insertion point is preserved when its old position maps
+    to a valid location in the new text. Writes go through :func:`apply_edit`
+    so decisions/overrides stay consistent. Returns ``(n_subs, warnings)``.
+    """
+    compound = build_compound(item, with_speaker=True)
+    new_compound, n_subs, warnings = replace_in_compound(
+        compound, regex, repl)
+    if n_subs == 0:
+        return 0, []
+    warnings += apply_edit(store, item, new_compound)
+    return n_subs, warnings
 
 
 # --------------------------------------------------------------------------

@@ -17,7 +17,10 @@ Keys:
     Ctrl+F            focus search box (EN/VN/ID, case-insensitive)
     Ctrl+L            focus file filter (table basename)
     Ctrl+N            next table file
-    Ctrl+T/G/O/M/H    copy VN / EN / compound / item info / debug
+    Ctrl+T/J/G/O/M/H  copy VN / JA / EN / compound / item info / debug
+    F2                configure a regex search & replace rule (session)
+    F5                apply the F2 rule to the current item's text
+    Ctrl+Up / Ctrl+Down  previous / next item
     Esc               back to the item list
     Ctrl+Q            quit
 """
@@ -25,6 +28,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import sys
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
@@ -33,9 +37,12 @@ sys.path.insert(0, os.path.join(_HERE, ".."))
 
 from textual.app import App, ComposeResult  # noqa: E402
 from textual.binding import Binding  # noqa: E402
+from textual.containers import (  # noqa: E402
+    Horizontal, ScrollableContainer, Vertical)
+from textual.screen import ModalScreen  # noqa: E402
 from textual.widgets import (  # noqa: E402
-    DataTable, Footer, Header, Input, Static, TextArea)
-from textual.containers import Horizontal, ScrollableContainer, Vertical  # noqa: E402
+    Button, Checkbox, DataTable, Footer, Header, Input, Label, RadioButton,
+    RadioSet, Static, TextArea)
 from textual import on  # noqa: E402
 
 from common import bootstrap  # noqa: E402
@@ -61,6 +68,7 @@ LEGEND = (
     "\n"
     "[b]Copy[/b]\n"
     "Ctrl+T   plain VN (markers stripped)\n"
+    "Ctrl+J   raw Japanese (source for kanji / exact meaning)\n"
     "Ctrl+G   EN (original text)\n"
     "Ctrl+O   compound as in the editor (with markers)\n"
     "Ctrl+M   item info (file / id / speaker / EN / VN)\n"
@@ -68,14 +76,151 @@ LEGEND = (
     "\n"
     "[b]Preview[/b]\n"
     "F4        toggle EN preview: plain or with game highlight markers\n"
+    "          ({c:}/{w:}/{b:} + {p} player-name insertion point)\n"
     "PgUp/PgDn scroll the focused preview / legend panel\n"
     "Ctrl+F    search (EN / VN / ID; * ? wildcards; \\n = space)\n"
     "Esc       clear search text, then back to the list\n"
+    "F2        configure a regex search & replace rule (session)\n"
+    "F5        apply the F2 rule to the current item's text\n"
+    "Ctrl+Up/Down  previous / next item\n"
     "\n"
     "[b]Editor[/b]\n"
     "F3        auto-wrap current text to the EN wrap width\n"
     "          (joins all lines, re-wraps; markers never split)"
 )
+
+
+class ReplaceScreen(ModalScreen):
+    """Modal dialog: configure a regex search & replace rule for this session.
+
+    The rule is stored on the app (``replace_rule``) and is NOT applied here;
+    pressing F5 while editing any item applies it to the current editor text.
+    """
+
+    BINDINGS = [
+        Binding("escape", "close", "Close", show=False),
+        Binding("ctrl+s", "close", "Close", show=False),
+    ]
+
+    def __init__(self, app):
+        super().__init__()
+        self.app_ref = app
+
+    def compose(self) -> ComposeResult:
+        with Vertical(id="replace-dialog"):
+            yield Static("[b]Search & replace rule (session)[/b]",
+                         id="replace-title")
+            yield Static("Saved for this session. Press F5 while editing any "
+                         "item to apply it to the current text (Ctrl+S saves "
+                         "the result).", classes="replace-sub")
+            yield Label("Pattern (regex)")
+            yield Input(placeholder=r"e.g. tàu bay|thuyền trưởng",
+                        id="replace_pattern")
+            yield Label("Replacement")
+            yield Input(placeholder=r"e.g. phi thuyền", id="replace_repl")
+            with Horizontal(id="replace-opts"):
+                yield Checkbox("Match case", id="replace_case")
+                yield Checkbox("Whole word", id="replace_word")
+            yield Static("-", id="replace_count")
+            yield Static("", id="replace_preview")
+            with Horizontal(id="replace-actions"):
+                yield Button("Save rule", id="replace_do", variant="primary")
+                yield Button("Close", id="replace_close")
+        yield Footer()
+
+    def on_mount(self) -> None:
+        app = self.app_ref
+        rx = getattr(app, "replace_rule", None)
+        if rx is not None:
+            self.query_one("#replace_pattern", Input).value = rx["pattern"]
+            self.query_one("#replace_repl", Input).value = rx["repl"]
+            self.query_one("#replace_case", Checkbox).value = rx["case"]
+            self.query_one("#replace_word", Checkbox).value = rx["word"]
+        self.query_one("#replace_pattern", Input).focus()
+        self.count()
+
+    @on(Input.Changed, "#replace_pattern")
+    @on(Input.Changed, "#replace_repl")
+    @on(Checkbox.Changed)
+    def _on_input_change(self, event) -> None:
+        self.count()
+
+    def _compile(self):
+        pat = self.query_one("#replace_pattern", Input).value
+        if not pat:
+            return None
+        flags = 0
+        if not self.query_one("#replace_case", Checkbox).value:
+            flags |= re.IGNORECASE
+        if self.query_one("#replace_word", Checkbox).value:
+            pat = r"\b(?:" + pat + r")\b"
+        try:
+            return re.compile(pat, flags)
+        except re.error:
+            return None
+
+    def _current_compound(self):
+        app = self.app_ref
+        if app.current_item is None:
+            return None
+        return app.query_one("#editor", TextArea).text
+
+    def count(self) -> None:
+        rx = self._compile()
+        compound = self._current_compound()
+        if rx is None or compound is None:
+            self.query_one("#replace_count", Static).update(
+                "invalid regex" if rx is None else "no item selected")
+            self.query_one("#replace_preview", Static).update("")
+            return
+        from tr_edit_core import parse_compound, replace_in_compound
+        _spk, vn, _hl, _pp = parse_compound(compound)
+        n = len(rx.findall(vn))
+        label = self.query_one("#replace_count", Static)
+        prev = self.query_one("#replace_preview", Static)
+        label.update(f"{n} match(es) in the current item")
+        if n:
+            repl = self.query_one("#replace_repl", Input).value
+            result, _subs, _warns = replace_in_compound(compound, rx, repl)
+            prev.update("[b]Preview:[/b]\n" + result)
+        else:
+            prev.update("")
+
+    def action_close(self) -> None:
+        self.dismiss(None)
+
+    @on(Button.Pressed)
+    def _on_button(self, event: Button.Pressed) -> None:
+        if event.button.id == "replace_close":
+            self.action_close()
+        elif event.button.id == "replace_do":
+            self._save_rule()
+
+    @on(Input.Submitted, "#replace_pattern")
+    def _on_pattern_submit(self, _event) -> None:
+        self.query_one("#replace_repl", Input).focus()
+
+    @on(Input.Submitted, "#replace_repl")
+    def _on_repl_submit(self, _event) -> None:
+        self._save_rule()
+
+    def _save_rule(self) -> None:
+        app = self.app_ref
+        rx = self._compile()
+        if rx is None:
+            self.notify("Pattern is empty or not a valid regex",
+                        severity="warning")
+            return
+        repl = self.query_one("#replace_repl", Input).value
+        app.replace_rule = {
+            "rx": rx,
+            "repl": repl,
+            "pattern": self.query_one("#replace_pattern", Input).value,
+            "case": self.query_one("#replace_case", Checkbox).value,
+            "word": self.query_one("#replace_word", Checkbox).value,
+        }
+        self.notify("Replace rule saved - press F5 to apply")
+        self.dismiss(None)
 
 
 class TrEditApp(App):
@@ -159,6 +304,62 @@ class TrEditApp(App):
         color: $text-muted;
         padding: 0 1;
     }
+    ReplaceScreen {
+        align: center middle;
+    }
+    #replace-dialog {
+        width: 78;
+        max-width: 90%;
+        height: auto;
+        max-height: 90%;
+        padding: 1 2;
+        border: round $accent;
+        background: $surface;
+        layer: overlay;
+    }
+    #replace-title {
+        text-style: bold;
+        margin-bottom: 1;
+    }
+    .replace-sub {
+        color: $text-muted;
+        margin-bottom: 1;
+    }
+    #replace-dialog Label {
+        margin-top: 1;
+    }
+    #replace-opts {
+        height: auto;
+        margin-top: 1;
+    }
+    #replace-opts Checkbox {
+        height: auto;
+        margin-right: 2;
+    }
+    #replace_count {
+        height: 1;
+        color: $text-muted;
+        margin-top: 1;
+    }
+    #replace_preview {
+        height: auto;
+        max-height: 8;
+        border: round $primary 40%;
+        padding: 0 1;
+        margin-top: 1;
+        overflow-y: auto;
+    }
+    #replace-actions {
+        height: 3;
+        align: right middle;
+    }
+    #replace-actions Button {
+        height: 3;
+        min-height: 3;
+        border: round $primary;
+        margin-left: 1;
+        padding: 0 1;
+    }
     """
 
     BINDINGS = [
@@ -172,12 +373,17 @@ class TrEditApp(App):
         Binding("pagedown", "scroll_panel_down", "Panel dn", show=False),
         Binding("pageup", "scroll_panel_up", "Panel up", show=False),
         Binding("ctrl+t", "copy_vn", "Copy VN", show=False),
+        Binding("ctrl+j", "copy_ja", "Copy JA", show=False),
         Binding("ctrl+g", "copy_en", "Copy EN", show=False),
         Binding("ctrl+o", "copy_compound", "Copy cmpnd", show=False),
         Binding("ctrl+m", "copy_item", "Copy item", show=False),
         Binding("ctrl+h", "copy_debug", "Copy debug", show=False),
         Binding("f4", "toggle_en_markers", "EN markers", show=False),
         Binding("f3", "auto_wrap", "Wrap", show=False),
+        Binding("f2", "open_replace", "Replace rule", show=False),
+        Binding("f5", "apply_replace", "Apply rule", show=False),
+        Binding("ctrl+up", "prev_item", "Prev item", show=False),
+        Binding("ctrl+down", "next_item", "Next item", show=False),
         Binding("ctrl+q", "quit", "Quit", show=False),
     ]
 
@@ -198,6 +404,7 @@ class TrEditApp(App):
         self._loaded = None        # last programmatic editor text
         self._suppress_highlight = False  # set during refresh's own selection
         self._en_markers = False   # show EN with game highlight markers
+        self.replace_rule = None   # session regex rule set via the F2 dialog
 
     # -- composition -------------------------------------------------------
 
@@ -352,7 +559,8 @@ class TrEditApp(App):
             en_view = self._rich_esc(item.en)
         prev = (f"[b]{item.file}[/b]  {ids}\n"
                 f"[b]EN{'+' if self._en_markers else ''}:[/b]\n{en_view}\n"
-                f"[b]VN (plain):[/b]\n{self._highlight_vn(item.vn)}")
+                f"[b]VN (plain):[/b]\n{self._highlight_vn(item.vn)}\n"
+                f"[b]JA (raw):[/b]\n{self._rich_esc(self.store.ja_text(item.file, item.ids) or '(no JA)')}")
         self.query_one("#preview", Static).update(prev)
         self._remeasure_panel("preview_sc")
         spk = item.speaker or "(none)"
@@ -515,6 +723,12 @@ class TrEditApp(App):
             return
         self._clip("EN", self.current_item.en)
 
+    def action_copy_ja(self) -> None:
+        if self.current_item is None:
+            return
+        ja = self.store.ja_text(self.current_item.file, self.current_item.ids)
+        self._clip("JA (raw)", ja or "")
+
     def action_toggle_en_markers(self) -> None:
         """Toggle the EN preview between plain text and game-highlight markers."""
         self._en_markers = not self._en_markers
@@ -642,6 +856,67 @@ class TrEditApp(App):
         self.current_key = None
         self.dirty = False
         self.refresh_table()
+
+    # -- item navigation & replace -----------------------------------------
+
+    def _step_item(self, delta: int) -> None:
+        """Move the table cursor by ``delta`` rows and load the item."""
+        table = self.query_one("#table", DataTable)
+        if self.dirty:
+            self.notify("Editor has unsaved changes - Ctrl+S to save, "
+                        "Ctrl+R to discard", severity="warning", timeout=4)
+            return
+        if not table.row_count:
+            return
+        idx = (table.cursor_row + delta) % table.row_count
+        try:
+            table.move_cursor(row=idx)
+        except Exception:
+            return
+        key = table.get_row_at(idx)
+        item = self.rows_by_key.get(key[0] + "\u0000" + key[1])
+        if item is not None and self._suppress_highlight is False:
+            self.load_item(item)
+
+    def action_prev_item(self) -> None:
+        self._step_item(-1)
+
+    def action_next_item(self) -> None:
+        self._step_item(1)
+
+    def action_open_replace(self) -> None:
+        self.push_screen(ReplaceScreen(self))
+
+    def action_apply_replace(self) -> None:
+        """Apply the session replace rule (F2) to the current editor text."""
+        rule = self.replace_rule
+        if rule is None:
+            self.notify("No replace rule set - press F2 to create one",
+                        severity="warning")
+            return
+        if self.current_item is None:
+            self.notify("No item open in the editor", severity="warning")
+            return
+        from tr_edit_core import replace_in_compound
+        editor = self.query_one("#editor", TextArea)
+        new_compound, n_subs, warns = replace_in_compound(
+            editor.text, rule["rx"], rule["repl"])
+        if n_subs == 0:
+            self.notify("Rule matched nothing in the current item",
+                        severity="warning")
+            return
+        # TextArea.Changed fires asynchronously after .text is set; because the
+        # new text differs from _loaded the event marks the edit as dirty, so
+        # Ctrl+S persists it and the dirty guard protects navigation.
+        editor.text = new_compound
+        self.update_editor_stats()
+        msg = f"Replaced {n_subs} occurrence(s)"
+        if warns:
+            msg += "\n" + "\n".join(warns[:4])
+            self.notify(msg + " - press Ctrl+S to save",
+                        severity="warning", timeout=6)
+        else:
+            self.notify(msg + " - press Ctrl+S to save", timeout=3)
 
     # -- filter inputs -----------------------------------------------------
 
