@@ -241,11 +241,19 @@ Keys:
 - Ctrl+E — focus the editor
 - Ctrl+S — save the current edit (writes all three JSONs)
 - Ctrl+R — discard the current edit, reload from the saved state
-- Ctrl+F — focus search (EN/VN/ID, case-insensitive, debounced, `*`/`?` wildcards)
+- Ctrl+F — focus search (EN/VN/ID, case-insensitive, debounced, `*`/`?`
+  wildcards; `\n` is treated as a space so a query typed with spaces matches
+  text split across line breaks)
 - Ctrl+L — focus the file filter (empty = browse all tables)
 - Ctrl+N — next table file
 - Esc — back to the item list
 - PageUp/PageDown — scroll the focused preview/legend panel
+- F4 — toggle the EN preview between plain text and the game's highlight
+  markers (`{c:}`/`{w:}`/`{b:}`), to see which substrings the engine highlights
+- F3 — auto-wrap the current editor text to the EN wrap width (the
+  `EN wrap Nch` number shown in the stats): all existing line breaks are first
+  joined into one flow, then the text is re-wrapped; highlight markers are kept
+  intact and never split across lines
 - Ctrl+T / Ctrl+G / Ctrl+O — copy VN (plain) / EN / compound to clipboard
 - Ctrl+M / Ctrl+H — copy item summary / debug dump
 - Ctrl+Q — quit
