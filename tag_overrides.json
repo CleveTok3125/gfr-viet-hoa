@@ -1815,14 +1815,14 @@
   "SNT_WD720040_0380": {
    "colors_": {
     "0": [
-     63,
-     71
+     73,
+     81
     ]
    },
    "words_": {
     "0": [
-     63,
-     71
+     73,
+     81
     ]
    }
   },
@@ -8131,6 +8131,14 @@
      33
     ]
    }
+  },
+  "SNT_FT510030_0190": {
+   "names_": {
+    "0": [
+     123,
+     123
+    ]
+   }
   }
  },
  "text_scenario_100": {
@@ -8433,7 +8441,68 @@
  },
  "text_story": {},
  "text_note": {},
- "text_fate_episode": {},
- "text": {},
- "text_scenario_330": {}
+ "text_fate_episode": {
+  "TXT_FATE_PLOT_PL1000_03": {
+   "names_": {
+    "0": [
+     337,
+     337
+    ]
+   }
+  },
+  "TXT_FATE_PLOT_PL1100_01": {
+   "names_": {
+    "0": [
+     146,
+     146
+    ]
+   }
+  }
+ },
+ "text": {
+  "TXT_WEP_EXPLAIN_PL0000_03_MAX": {
+   "names_": {
+    "0": [
+     56,
+     56
+    ]
+   }
+  },
+  "TXT_WEP_EXPLAIN_PL0100_03_MAX": {
+   "names_": {
+    "0": [
+     56,
+     56
+    ]
+   }
+  },
+  "TXT_ITEM_INFO_70_0001_01": {
+   "names_": {
+    "0": [
+     4,
+     4
+    ]
+   }
+  },
+  "TXT_ITEM_INFO_70_0001_02": {
+   "names_": {
+    "0": [
+     4,
+     4
+    ]
+   }
+  },
+  "TXT_ITEM_INFO_70_0001_03": {
+   "names_": {
+    "0": [
+     4,
+     4
+    ]
+   }
+  }
+ },
+ "text_scenario_330": {},
+ "text_badge": {},
+ "text_skillboard": {},
+ "text_scenario_400": {}
 }
