@@ -238,11 +238,17 @@
   },
   "SNT_WD720042_0430": {
    "colors_": {
+    "0": [
+     "ragnalia"
+    ],
     "1": [
      "Hợp Lưu"
     ]
    },
    "words_": {
+    "0": [
+     "ragnalia"
+    ],
     "1": [
      "Hợp Lưu"
     ]
@@ -1326,6 +1332,66 @@
    "colors_": {
     "0": [
      "Núi Neigelith."
+    ]
+   }
+  },
+  "SNT_WD720040_0240": {
+   "colors_": {
+    "0": [
+     "Zegagrande"
+    ]
+   },
+   "words_": {
+    "0": [
+     "Zegagrande"
+    ]
+   }
+  },
+  "SNT_WD720040_0250": {
+   "colors_": {
+    "0": [
+     "Liên Minh Phi Hành Đoàn Rafale"
+    ]
+   },
+   "words_": {
+    "0": [
+     "Liên Minh Phi Hành Đoàn Rafale"
+    ]
+   }
+  },
+  "SNT_WD720040_0260": {
+   "colors_": {
+    "0": [
+     "Zegagrande"
+    ]
+   },
+   "words_": {
+    "0": [
+     "Zegagrande"
+    ]
+   }
+  },
+  "SNT_WD720040_0325": {
+   "colors_": {
+    "0": [
+     "ragnalia"
+    ]
+   },
+   "words_": {
+    "0": [
+     "ragnalia"
+    ]
+   }
+  },
+  "SNT_WD720040_0380": {
+   "colors_": {
+    "0": [
+     "Ragnalia"
+    ]
+   },
+   "words_": {
+    "0": [
+     "Ragnalia"
     ]
    }
   }
