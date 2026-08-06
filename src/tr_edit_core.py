@@ -349,6 +349,15 @@ def _load_markers(store, file, ids, vn):
         ov = store.overrides.get(base, {}).get(rid, {}).get("names_")
         if ov and "0" in ov:
             player_pos = int(ov["0"][0])
+            break
+        # fall back to the position baked into the tuned game tag so the
+        # player-name marker is visible and editable in the editor too.
+        for s, e in _tuned_spans(store, base, rid, "names_"):
+            if 0 <= s <= len(vn):
+                player_pos = s
+                break
+        if player_pos is not None:
+            break
     # highlight phrases: decisions give phrases, overrides give positions.
     # identical phrase at the same offset is merged into one marker (e.g. c+w).
     for rid in ids:
@@ -687,6 +696,10 @@ def apply_edit(store, item, compound):
         store.overrides = {}
     item.vn = vn
     item.speaker = speaker or item.speaker
+    # refresh the markers so a later build_compound reflects the saved state
+    # (otherwise the editor would re-render the pre-edit markers)
+    item.markers, item.player_pos = _load_markers(
+        store, item.file, item.ids, vn)
     return warnings
 
 
