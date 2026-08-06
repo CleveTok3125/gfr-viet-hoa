@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.5.9 - captain/Dragon Knight scenes, session replace rule & JA reference (2026-08-06)
+
+- **Translations.** Rewrote the **White Dragon Knights** gallant characters
+  (Lancelot, Percival, Siegfried, Vane) and the Bluesky Knights / Seedhollow
+  scenes, plus the Captain's Adept Arts (Bí Kỹ) skill descriptions and several
+  character profiles. Standardized the per-scene address term to match the
+  captain's role (`thuyền trưởng` vs `đội trưởng`). Highlight ranges
+  (`tag_overrides.json`) updated for the edited rows and
+  `data/release_manifest.json` regenerated.
+- **TUI editor: session regex replace rule (F2/F5).** F2 opens a dialog where
+  you type a regex pattern, replacement and case/whole-word options; a live
+  count and a live preview of the resulting text update as you type. Saving
+  keeps the rule in memory for the session. F5 applies the rule to the editor's
+  current text immediately, re-anchoring highlight markers (phrases that
+  disappear are reported as warnings); the edit is only written on Ctrl+S.
+- **TUI editor: quick navigation.** Ctrl+Up / Ctrl+Down move to the previous /
+  next item (wraps around; refuses to move away with unsaved changes).
+- **TUI editor: raw-Japanese reference (Ctrl+J).** Copies the original Japanese
+  row for the current item to the clipboard, and the preview now also shows the
+  raw Japanese (`JA (raw)`) beneath the English for kanji-exact reference.
+- **Translation notes.** Added `TRANSLATION_NOTES.md` (written in Vietnamese) as
+  the reference for translation rules, terminology and the captain address-term
+  policy; linked from the README.
+
 ## v0.5.8 - translation polish for the Eternals arc (2026-08-06)
 
 - **Eternals arc scenes rewritten.** Dialogue quality improved across the
