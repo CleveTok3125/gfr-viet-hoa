@@ -17,10 +17,13 @@ Keys:
     Ctrl+F            focus search box (EN/VN/ID, case-insensitive)
     Ctrl+L            focus file filter (table basename)
     Ctrl+N            next table file
-    Ctrl+T/J/G/O/M/H  copy VN / JA / EN / compound / item info / debug
-    F2                configure a regex search & replace rule (session)
+    Ctrl+T/J/G/O  copy VN / JA / EN / compound
+    Ctrl+M        copy just the file or just the ID (inline menu)
+    Ctrl+H        full debug dump
+    F2                configure a regex search & replace rule (inline panel)
     F5                apply the F2 rule to the current item's text
     Ctrl+Up / Ctrl+Down  previous / next item
+    Ctrl+K                view context (focus table + jump to row)
     Esc               back to the item list
     Ctrl+Q            quit
 """

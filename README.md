@@ -99,6 +99,25 @@ created (the materialized `ko/` tables, tuned `*_tag.msg` tables, and the
 installed fonts). Sound/ui and every archive-only file are left untouched; a
 later `apply.py` run rebuilds the patch from scratch.
 
+**Rebuild from pristine.** Use `--rebuild` to return the game to its original
+state, apply the patch again from scratch, and finish by writing a *fresh*
+release manifest (instead of hash-verifying against the old one) — handy when
+translations changed so references moved:
+
+```bash
+python3 -m gfrpatch --game "<game>" --rebuild
+```
+
+It requires the apply-time backup to exist (run a normal patch first); it
+exits with code 2 otherwise.
+
+**Launch the translation editor.** `gfrpatch` also serves as the launcher for
+the interactive TUI editor:
+
+```bash
+python3 -m gfrpatch edit --game "<game>" --file text_scenario_030
+```
+
 **Re-apply protection.** If the install looks already patched (`data.i`
 differs from the backup) `apply.py` aborts with a hint and asks for
 `--force` to proceed anyway (safe: it is idempotent), or `--restore` to
@@ -260,16 +279,22 @@ Keys:
   intact and never split across lines
 - Ctrl+T / Ctrl+J / Ctrl+G / Ctrl+O — copy VN (plain) / raw Japanese / EN /
   compound to clipboard
-- Ctrl+M / Ctrl+H — copy item summary / debug dump
+- Ctrl+M — copy just the current item's file or ID (pick one in an inline
+  menu in the bottom-left panel)
+- Ctrl+H — copy a full debug dump
 - Ctrl+Up / Ctrl+Down — previous / next item (wraps around; the editor
   refuses to move away with unsaved changes)
-- F2 — open a dialog to configure a regex search & replace rule for the
-  session (pattern, replacement, match-case / whole-word options); it shows a
-  live count and a live preview of the resulting text as you type, and the
-  dialog closes when saved, keeping the rule in memory
+- F2 — configure a regex search & replace rule for the session (pattern,
+  replacement, match-case / whole-word options); it shows a live count and a
+  live preview of the resulting text as you type, and saving keeps the rule in
+  memory. The form is shown inline in place of the legend panel, so you can
+  still switch items while it is open (the preview re-evaluates for the
+  current item).
 - F5 — apply the saved F2 rule to the text of the item currently open in the
   editor, immediately; markers stay aligned (phrases that disappear are
   reported as warnings). The change is not written until you press Ctrl+S.
+- Ctrl+K — view context: focus the current item's table (fills the file
+  filter and clears the search) and jump the cursor to that item's row
 - Ctrl+Q — quit
 
 The preview panel highlights the current search query inside the plain VN text
