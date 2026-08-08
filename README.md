@@ -266,11 +266,12 @@ Keys:
 - Ctrl+F — focus search (EN/VN/ID, case-insensitive, debounced, `*`/`?`
   wildcards; `\n` is treated as a space so a query typed with spaces matches
   text split across line breaks)
-- Ctrl+L — focus the file filter (empty = browse all tables)
-- Ctrl+Alt+L — focus the index-range filter (e.g. `100-120`, a bare `100`, or
-  an open-ended `100-`). It sits just left of the file filter. When it holds a
-  range only those rows are listed, and the index column `N` shows the item's
-  position in that table's enumeration
+- Ctrl+L — focus the file filter (empty = browse all tables); Tab moves the
+  focus across all five filter boxes (search, range, file, ID, Speaker)
+- The index-range filter (e.g. `100-120`, a bare `100`, or an open-ended `100-`)
+  sits next to the file filter. When it holds a range only those rows are
+  listed, and the index column `N` shows the item's position in that table's
+  enumeration
 - ID and Speaker filter boxes in the filter bar: typing in them keeps only
   rows whose row id / speaker matches (the bar reads search - range - file -
   ID - Speaker, left to right)
@@ -304,8 +305,8 @@ Keys:
   file filter, clears the search, and sets the index-range filter to a small
   window (current index ± 15) so the item's row is always visible on screen
   without scrolling. The range box shows e.g. `135-165`; the notification
-  reports the exact item index, and you can widen the range with Ctrl+Alt+L to
-  read more context above/below
+  reports the exact item index, and you can widen the range to read more
+  context above/below
 - Ctrl+Q — quit
 
 The preview panel highlights the current search query inside the plain VN text
