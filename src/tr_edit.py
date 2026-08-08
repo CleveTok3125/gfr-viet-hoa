@@ -22,7 +22,7 @@ Keys:
     Ctrl+H        full debug dump
     F2                configure a regex search & replace rule (inline panel)
     F5                apply the F2 rule to the current item's text
-    F6                edit voice-sync (times_) markers for the current item
+    F9                edit voice-sync (times_) markers for the current item
     Ctrl+Up / Ctrl+Down  previous / next item
     F8                view context (fill range box around the item + jump)
     Esc               back to the item list
@@ -88,7 +88,7 @@ LEGEND = (
     "Esc       clear search text, then back to the list\n"
     "F2        configure a regex search & replace rule (session)\n"
     "F5        apply the F2 rule to the current item's text\n"
-    "F6        edit voice-sync (times_) markers for the current item\n"
+    "F9        edit voice-sync (times_) markers for the current item\n"
     "Ctrl+Up/Down  previous / next item\n"
     "F8        view context: fill the file + a small index-range window\n"
     "          around the current item and jump to its row (kept visible)\n"
@@ -296,6 +296,8 @@ class TimesPanel(Vertical):
         self.notify(f"Saved {len(out)} voice-sync marker(s) - rebuild the "
                     "patch for the game to pick them up")
         app.close_slot()
+        if app.current_item is not None:
+            app._refresh_preview()
 
 
 class SlotMenu(Vertical):
@@ -622,7 +624,7 @@ class TrEditApp(App):
         Binding("f3", "auto_wrap", "Wrap", show=False),
         Binding("f2", "open_replace", "Replace rule", show=False),
         Binding("f5", "apply_replace", "Apply rule", show=False),
-        Binding("f6", "open_times", "Sync times", show=False),
+        Binding("f9", "open_times", "Sync times", show=False),
         Binding("ctrl+up", "prev_item", "Prev item", show=False),
         Binding("ctrl+down", "next_item", "Next item", show=False),
         Binding("f8", "view_context", "Context", show=False),
@@ -845,19 +847,7 @@ class TrEditApp(App):
     def load_item(self, item) -> None:
         self.current_key = (item.file, item.en)
         self.current_item = item
-        ids = ", ".join(item.ids) or "(no id)"
-        if self._en_markers:
-            from tr_edit_core import en_compound
-            en_view = self._rich_esc(en_compound(self.store, item))
-        else:
-            en_view = self._rich_esc(item.en)
-        prev = (f"[b]{item.file}[/b]  {ids}\n"
-                f"[b]EN{'+' if self._en_markers else ''}:[/b]\n{en_view}\n"
-                f"[b]VN (plain):[/b]\n{self._highlight_vn(item.vn)}\n"
-                f"[b]JA (raw):[/b]\n{self._rich_esc(self.store.ja_text(item.file, item.ids) or '(no JA)')}")
-        prev = self._append_times_preview(prev, item)
-        self.query_one("#preview", Static).update(prev)
-        self._remeasure_panel("preview_sc")
+        self._render_preview(item)
         spk = item.speaker or "(none)"
         self.query_one("#editor_head", Static).update(
             f"[b]Speaker:[/b] {spk}   [b](read-only, not counted)[/b]")
@@ -870,12 +860,42 @@ class TrEditApp(App):
         self.update_editor_stats()
         self._refresh_panel()
 
+    def _render_preview(self, item) -> None:
+        ids = ", ".join(item.ids) or "(no id)"
+        from tr_edit_core import tuned_times, en_compound
+        base = item.file[:-len(".msg")]
+        sync_offs = []
+        for rid in item.ids:
+            for _t, _w, s, e in tuned_times(self.store, base, rid):
+                sync_offs.append(s)
+                if e != s:
+                    sync_offs.append(e)
+            if sync_offs:
+                break
+        if self._en_markers:
+            en_view = self._highlight_en(en_compound(self.store, item),
+                                         item.file, item.ids)
+        else:
+            en_view = self._rich_esc(item.en)
+        prev = (f"[b]{item.file}[/b]  {ids}\n"
+                f"[b]EN{'+' if self._en_markers else ''}:[/b]\n{en_view}\n"
+                f"[b]VN (plain):[/b]\n{self._highlight_vn(item.vn, sync_offs)}\n"
+                f"[b]JA (raw):[/b]\n{self._rich_esc(self.store.ja_text(item.file, item.ids) or '(no JA)')}")
+        prev = self._append_times_preview(prev, item)
+        self.query_one("#preview", Static).update(prev)
+        self._remeasure_panel("preview_sc")
+
+    def _refresh_preview(self) -> None:
+        """Re-render only the preview for the current item (no editor reset)."""
+        if self.current_item is not None:
+            self._render_preview(self.current_item)
+
     def _append_times_preview(self, prev, item) -> None:
         """Append a ``times_`` voice-sync line to the preview (if any markers).
 
         The markers are read from tag_tuning.json (the tuned snapshot). Each is
         shown as ``@offset time=Ns wait`` so a translator can spot sync points
-        and open the Times panel (F6) to fix an offset manually.
+        and open the Times panel (F9) to fix an offset manually.
         """
         from tr_edit_core import tuned_times
         for rid in item.ids:
@@ -934,36 +954,98 @@ class TrEditApp(App):
 
         self.set_timer(0.1, _invalidate)
 
-    def _highlight_vn(self, vn: str) -> str:
-        """Render ``vn`` with search query matches wrapped in reverse video."""
+    def _highlight_vn(self, vn: str, sync_offs=()) -> str:
+        """Render ``vn`` with search matches in reverse video and voice-sync
+        markers (``times_`` offsets) tinted a faint accent so the pause point
+        is visible at a glance.
+
+        A ``times_`` marker offsets the character where the next reveal segment
+        begins; the actual pause is the punctuation right before it (usually a
+        ``.``/``,``/``...``), so each marker highlights that single character.
+        """
         q = self.query_one("#search", Input).value.strip()
-        if not q:
-            return self._rich_esc(vn)
         from tr_edit_core import _WILDCARD_RE, _wildcard_regex, _norm_ws
         norm = _norm_ws(vn)
-        if _WILDCARD_RE.search(q):
-            rx = _wildcard_regex(_norm_ws(q))
-            spans = [(m.start(), m.end()) for m in rx.finditer(norm)]
+        if q:
+            if _WILDCARD_RE.search(q):
+                rx = _wildcard_regex(_norm_ws(q))
+                spans = [(m.start(), m.end()) for m in rx.finditer(norm)]
+            else:
+                qn = _norm_ws(q).lower()
+                nl = norm.lower()
+                spans = []
+                i = 0
+                while True:
+                    i = nl.find(qn, i)
+                    if i < 0:
+                        break
+                    spans.append((i, i + len(qn)))
+                    i += len(qn)
         else:
-            qn = _norm_ws(q).lower()
-            nl = norm.lower()
             spans = []
-            i = 0
-            while True:
-                i = nl.find(qn, i)
-                if i < 0:
-                    break
-                spans.append((i, i + len(qn)))
-                i += len(qn)
-        if not spans:
+        # map each times_ offset to the pause character. A marker points at the
+        # character where the reveal pauses: the punctuation just before it
+        # (auto-remapped offsets land on the char after the punctuation) or the
+        # offset itself when it sits directly on the pause char (hand-edited
+        # via F9, where the value is the cursor position). Scan from the offset
+        # (inclusive) so both conventions highlight the punctuation.
+        marks = {}
+        for off in sync_offs:
+            j = off
+            while j >= 0 and vn[j].isspace():
+                j -= 1
+            if j >= 0:
+                marks[j] = True
+        if not spans and not marks:
             return self._rich_esc(vn)
-        out = []
-        cur = 0
+        # render char by char: reverse video for search hits, blue background
+        # for voice-sync pause chars (search wins on overlap).
+        span_set = set()
         for s, e in spans:
-            out.append(self._rich_esc(vn[cur:s]))
-            out.append(f"[reverse]{self._rich_esc(vn[s:e])}[/reverse]")
-            cur = e
-        out.append(self._rich_esc(vn[cur:]))
+            span_set.update(range(s, e))
+        out = []
+        for i, ch in enumerate(vn):
+            if i in span_set:
+                out.append(f"[reverse]{self._rich_esc(ch)}[/]")
+            elif i in marks:
+                out.append(f"[on #7aa6d9]{self._rich_esc(ch)}[/]")
+            else:
+                out.append(self._rich_esc(ch))
+        return "".join(out)
+
+    def _highlight_en(self, en_view: str, file: str, ids) -> str:
+        """Tint the EN+ preview's voice-sync pause chars.
+
+        ``en_view`` is the EN compound with highlight markers
+        (``en_compound``); the ``times_`` offsets read from the EN tag index the
+        plain EN string and land on the char after the pause punctuation, so
+        each is first moved back to the punctuation (like ``_highlight_vn``),
+        then mapped through ``en_index_at`` to the compound position and given
+        the same blue tint as the VN line.
+        """
+        from tr_edit_core import en_compound, en_index_at
+        offs = self.store.en_times_offsets(file, ids)
+        if not offs:
+            return en_view
+        plain_en = self.current_item.en
+        marks = set()
+        for off in offs:
+            j = off
+            while j > 0 and plain_en[j - 1].isspace():
+                j -= 1
+            if j > 0:
+                j -= 1
+            ci = en_index_at(en_view, plain_en, j)
+            if 0 <= ci < len(en_view):
+                marks.add(ci)
+        if not marks:
+            return en_view
+        out = []
+        for i, ch in enumerate(en_view):
+            if i in marks:
+                out.append(f"[on #7aa6d9]{self._rich_esc(ch)}[/]")
+            else:
+                out.append(self._rich_esc(ch))
         return "".join(out)
 
     @on(TextArea.Changed)
@@ -986,10 +1068,16 @@ class TrEditApp(App):
         chars = len(text)
         row, col = editor.cursor_location
         lines = text.split("\n")
-        before_visible = sum(len(line) for line in lines[:row]) + col
         tallest = max((len(line) for line in lines), default=0)
         enc = self.current_item.en if self.current_item is not None else ""
         wrap = max((len(line) for line in enc.split("\n")), default=0)
+        # cursor offset in the editor text (newlines counted), then mapped to
+        # the plain-VN index so markers ({p}, {c:..}) don't shift the count.
+        cur_off = sum(len(line) for line in lines[:row]) + row + col
+        from tr_edit_core import vn_index_at
+        vn_idx = vn_index_at(text, cur_off)
+        nls = text.count("\n", 0, cur_off)
+        before_visible = vn_idx - nls
         self.query_one("#editor_stats", Static).update(
             f"words {words} · chars {chars} · cursor {row + 1}:{col + 1} · "
             f"longest line {tallest}ch · EN wrap {wrap}ch · "
