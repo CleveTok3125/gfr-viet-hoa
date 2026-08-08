@@ -16,6 +16,7 @@ Keys:
     Ctrl+R            discard current edit, reload from disk state
     Ctrl+F            focus search box (EN/VN/ID, case-insensitive)
     Ctrl+L            focus file filter (table basename)
+    Ctrl+Alt+L        focus index range filter (e.g. 100-120)
     Ctrl+N            next table file
     Ctrl+T/J/G/O  copy VN / JA / EN / compound
     Ctrl+M        copy just the file or just the ID (inline menu)
@@ -23,7 +24,7 @@ Keys:
     F2                configure a regex search & replace rule (inline panel)
     F5                apply the F2 rule to the current item's text
     Ctrl+Up / Ctrl+Down  previous / next item
-    F8                view context (focus table + jump to row)
+    F8                view context (fill range box around the item + jump)
     Esc               back to the item list
     Ctrl+Q            quit
 """
@@ -54,6 +55,7 @@ from tr_edit_core import (  # noqa: E402
     Store, iter_items, matches, build_compound, parse_compound, apply_edit)
 
 MAX_ROWS = 3000
+CONTEXT_MARGIN = 15
 
 LEGEND = (
     "[b]Marker legend[/b]\n"
@@ -81,11 +83,14 @@ LEGEND = (
     "          ({c:}/{w:}/{b:} + {p} player-name insertion point)\n"
     "PgUp/PgDn scroll the focused preview / legend panel\n"
     "Ctrl+F    search (EN / VN / ID; * ? wildcards; \\n = space)\n"
+    "Ctrl+L, Ctrl+Alt+L  focus file / index-range filter (Ctrl+Alt+L=N-N)\n"
+    "ID / Speaker  filter boxes in the bar (filtrate table by id / speaker)\n"
     "Esc       clear search text, then back to the list\n"
     "F2        configure a regex search & replace rule (session)\n"
     "F5        apply the F2 rule to the current item's text\n"
     "Ctrl+Up/Down  previous / next item\n"
-    "F8    view context: focus the item's table and jump to its row\n"
+    "F8        view context: fill the file + a small index-range window\n"
+    "          around the current item and jump to its row (kept visible)\n"
     "\n"
     "[b]Editor[/b]\n"
     "F3        auto-wrap current text to the EN wrap width\n"
@@ -297,6 +302,20 @@ class TrEditApp(App):
     #search {
         width: 33%;
     }
+    #file {
+        width: 1fr;
+    }
+    #range {
+        width: 12;
+        min-width: 10;
+    }
+    #id {
+        width: 1fr;
+    }
+    #speaker {
+        width: 14;
+        min-width: 10;
+    }
     .main {
         height: 1fr;
     }
@@ -461,6 +480,7 @@ class TrEditApp(App):
         Binding("ctrl+e", "focus_editor", "Edit", show=True),
         Binding("ctrl+f", "focus_search", "Search", show=True),
         Binding("ctrl+l", "focus_file", "File", show=True),
+        Binding("ctrl+alt+l", "focus_range", "Range", show=True),
         Binding("ctrl+n", "next_file", "Next file", show=True),
         Binding("escape", "focus_table", "List", show=True),
         Binding("pagedown", "scroll_panel_down", "Panel dn", show=False),
@@ -493,7 +513,10 @@ class TrEditApp(App):
         self._search_timer = None
         self._search_armed_query = ""
         self._skip_search_debounce = False
+        self._skip_range_sync = False
+        self.range = None   # (start, end) inclusive, or None
         self.items = []            # filtered Item list in table order
+        self.items_idx = []        # enumeration index per self.items entry
         self.current_key = None    # (file, en) currently in the editor
         self.current_item = None   # Item currently in the editor
         self.dirty = False
@@ -510,8 +533,11 @@ class TrEditApp(App):
             with Horizontal(classes="filters"):
                 yield Input(placeholder="search EN / VN / ID (* ? wildcards)",
                             id="search")
+                yield Input(placeholder="N-N", id="range")
                 yield Input(placeholder="file base (e.g. text_scenario_030)",
                             value=self.base, id="file")
+                yield Input(placeholder="ID", id="id")
+                yield Input(placeholder="Speaker", id="speaker")
             with Horizontal(classes="main"):
                 with Vertical(classes="pane pane-left"):
                     with ScrollableContainer(id="preview_sc"):
@@ -548,20 +574,43 @@ class TrEditApp(App):
     def refresh_table(self, keep_key=None) -> None:
         store, base = self.store, self.base
         q = self.query_one("#search", Input).value.strip()
+        q_id = self.query_one("#id", Input).value.strip().lower()
+        q_sp = self.query_one("#speaker", Input).value.strip().lower()
         bases = {base} if base else None
         held = {}
+        lo, hi = self.range if self.range is not None else (None, None)
         found = []
+        found_idx = []
+        idx = 0
         for it in iter_items(store, bases=bases, holds=held):
+            # The range filters on the item's position in this table's (or the
+            # whole-database) enumeration, stable regardless of the search
+            # query, so view_context can compute it once and expand outwards.
+            if lo is not None and idx < lo:
+                idx += 1
+                continue
+            if hi is not None and idx > hi:
+                break
             if q and not matches(store, it, q):
+                idx += 1
+                continue
+            if q_id and not any(q_id in rid.lower() for rid in it.ids):
+                idx += 1
+                continue
+            if q_sp and q_sp not in (it.speaker or "").lower():
+                idx += 1
                 continue
             found.append(it)
+            found_idx.append(idx)
+            idx += 1
             if len(found) >= MAX_ROWS:
                 break
         table = self.query_one("#table", DataTable)
         table.clear()
         self.items = found
+        self.items_idx = found_idx
         self.rows_by_key = {it.file + "\u0000" + it.en: it for it in found}
-        for n, it in enumerate(found):
+        for i, it in enumerate(found):
             ids = ",".join(it.ids[:2])
             if len(it.ids) > 2:
                 ids += "…"
@@ -571,7 +620,7 @@ class TrEditApp(App):
             nid = it.file[:-len(".msg")]
             if len(nid) > 18:
                 nid = nid[:17] + "…"
-            table.add_row(str(n), nid, ids or "-",
+            table.add_row(str(found_idx[i]), nid, ids or "-",
                           (it.speaker or "")[:14] or "-",
                           en_line, key=(it.file, it.en))
         # selection: keep the current row while editing (dirty), else pick
@@ -624,8 +673,13 @@ class TrEditApp(App):
     def set_hint(self) -> None:
         n = len(self.items)
         scope = f"{self.base}.msg" if self.base else "all files"
+        if self.range is not None and self.items_idx:
+            lo, hi = self.items_idx[0], self.items_idx[-1]
+            rng = f"idx {lo}-{hi}" if lo != hi else f"idx {lo}"
+        else:
+            rng = ""
         self.query_one("#hint", Static).update(
-            f"{n} item(s) · {scope} · "
+            f"{n} item(s) · {scope} {rng}".strip() + " · "
             "Ctrl+S save · Ctrl+R reset · Ctrl+F search · F4 EN · F3 wrap")
 
     # -- selection / editor ------------------------------------------------
@@ -952,6 +1006,9 @@ class TrEditApp(App):
     def action_focus_file(self) -> None:
         self.query_one("#file", Input).focus()
 
+    def action_focus_range(self) -> None:
+        self.query_one("#range", Input).focus()
+
     def action_focus_table(self) -> None:
         search = self.query_one("#search", Input)
         if self.screen.focused is search and search.value:
@@ -1001,11 +1058,13 @@ class TrEditApp(App):
         self._step_item(1)
 
     def action_view_context(self) -> None:
-        """Jump to the selected item's context in the item list.
+        """Show the selected item's table context in the item list.
 
         Fills the file filter with the current item's table, clears the search
-        so every row of that table is listed, then navigates the cursor to the
-        row whose ID matches the captured item.
+        so every row of that table is listed, and pins the index-range filter
+        to a window around the item so its row is visible on screen. The item
+        itself stays selected (the range keeps its key in the filtered set);
+        the notification reports the exact index instead of jumping the cursor.
         """
         if self.current_item is None or self.dirty:
             if self.dirty:
@@ -1013,7 +1072,6 @@ class TrEditApp(App):
                             "Ctrl+R to discard", severity="warning", timeout=4)
             return
         it = self.current_item
-        target_ids = set(it.ids)
         key = (it.file, it.en)
         # Cancel a pending debounced search so its delayed refresh_table cannot
         # run after us and reset the cursor back to the first row.
@@ -1023,42 +1081,53 @@ class TrEditApp(App):
             self._search_armed_query = ""
         # Suppress the async Input.Changed that clearing the box below posts;
         # without it on_search re-arms a timer that fires a redundant refresh
-        # ~0.6s later, briefly slamming the scroll back to the top before it
-        # scrolls to the target row again (a visible blink).
+        # (see _debounced_search) and can nudge the cursor.
         self._skip_search_debounce = True
-        # The async Input.Changed for the cleared box is delivered in the next
-        # message batch; reset the guard after it has been processed so later
-        # real searches are still debounced.
         self.set_timer(0.1, lambda: setattr(self, "_skip_search_debounce", False))
         self.base = it.file[:-len(".msg")]
         self.query_one("#file", Input).value = self.base
         search = self.query_one("#search", Input)
         if search.value:
             search.value = ""
+        # Show the item's own file with a window of rows around it. The range
+        # filter pins the table to a small contiguous slice, so the item's row
+        # is always on screen without needing to scroll the full file.
+        idx = self._enum_index_of(key)
+        if idx < 0:
+            self.notify("Could not find the item's index", severity="warning",
+                        timeout=3)
+            return
+        lo = max(0, idx - CONTEXT_MARGIN)
+        hi = idx + CONTEXT_MARGIN
+        self.range = (lo, hi)
+        # Setting the box posts a Changed to on_range; guard it so it does not
+        # clear the selection and refresh again (which would drop the cursor
+        # back to row 0).
+        self._skip_range_sync = True
+        self.query_one("#range", Input).value = f"{lo}-{hi}"
+        self.set_timer(0.1, lambda: setattr(self, "_skip_range_sync", False))
         self.refresh_table()
         if self.dirty:
             return
-        table = self.query_one("#table", DataTable)
-        # Move to the exact (file, en) row when present. We index self.items
-        # (which mirror the table rows in order) by their (file, en) string
-        # key rather than relying on an identity scan, which would miss
-        # duplicate (file, en) entries, or on get_row_index, whose internal
-        # row key can differ from rows_by_key on such duplicates.
-        skey = key[0] + "\u0000" + key[1]
-        if skey in self.rows_by_key:
-            for idx, row in enumerate(self.items):
-                if row.file + "\u0000" + row.en == skey:
-                    table.move_cursor(row=idx)
-                    self.load_item(row)
-                    self.notify(f"Context: {self.base}.msg (#{idx})", timeout=2)
-                    return
-            if target_ids.intersection(row.ids):
-                table.move_cursor(row=idx)
-                self.load_item(row)
-                self.notify(f"Context: {self.base}.msg (#{idx})", timeout=2)
-                return
-        self.notify("No row found for the captured ID", severity="warning",
-                    timeout=3)
+        self.notify(f"Context: {self.base}.msg (item idx {idx})", timeout=2)
+
+    def _enum_index_of(self, key) -> int:
+        """Return the enumeration position of ``key=(file, en)`` inside its
+        table (matching the index column), or -1 if never encountered before
+        MAX_ROWS scanning is impractical for a huge file header check.
+        """
+        store = self.store
+        base = key[0]
+        if base.endswith(".msg"):
+            base = base[:-len(".msg")]
+        bases = {base} if base else None
+        held = {}
+        idx = 0
+        for it in iter_items(store, bases=bases, holds=held):
+            if it.file == key[0] and it.en == key[1]:
+                return idx
+            idx += 1
+        return -1
 
     # -- inline slot (replaces the legend panel, bottom-left) --------------
 
@@ -1158,6 +1227,53 @@ class TrEditApp(App):
     @on(Input.Submitted, "#file")
     def on_file_submit(self, _event) -> None:
         self.query_one("#table", DataTable).focus()
+
+    @on(Input.Changed, "#id")
+    def on_id(self, event: Input.Changed) -> None:
+        if not self.dirty:
+            self.current_key = None
+        self.refresh_table()
+
+    @on(Input.Changed, "#speaker")
+    def on_speaker(self, event: Input.Changed) -> None:
+        if not self.dirty:
+            self.current_key = None
+        self.refresh_table()
+
+    @on(Input.Changed, "#range")
+    def on_range(self, event: Input.Changed) -> None:
+        text = event.value.strip()
+        new_range = self._parse_range(text)
+        if self._skip_range_sync:
+            # view_context programmatically set the box and already refreshed;
+            # keep the range it chose without clearing the selection.
+            self.range = new_range
+            return
+        self.range = new_range
+        if not self.dirty:
+            self.current_key = None
+        self.refresh_table()
+
+    @staticmethod
+    def _parse_range(text: str):
+        """Parse an inclusive idx range like '100-120' (or '100', '100-').
+
+        Returns (lo, hi) with None for open ends, or None if the text is not a
+        valid range.
+        """
+        if not text:
+            return None
+        m = re.fullmatch(r"\s*(\d+)(?:\s*-\s*(\d*))?\s*", text)
+        if not m:
+            return None
+        lo = int(m.group(1))
+        hi = int(m.group(2)) if m.group(2) else None
+        # A bare number is a single row (range hi==lo); '100-' stays open-ended.
+        if hi is None and not text.rstrip().endswith("-"):
+            hi = lo
+        if hi is not None and hi < lo:
+            lo, hi = hi, lo
+        return (lo, hi)
 
 
 def main() -> int:

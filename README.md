@@ -267,6 +267,13 @@ Keys:
   wildcards; `\n` is treated as a space so a query typed with spaces matches
   text split across line breaks)
 - Ctrl+L — focus the file filter (empty = browse all tables)
+- Ctrl+Alt+L — focus the index-range filter (e.g. `100-120`, a bare `100`, or
+  an open-ended `100-`). It sits just left of the file filter. When it holds a
+  range only those rows are listed, and the index column `N` shows the item's
+  position in that table's enumeration
+- ID and Speaker filter boxes in the filter bar: typing in them keeps only
+  rows whose row id / speaker matches (the bar reads search - range - file -
+  ID - Speaker, left to right)
 - Ctrl+N — next table file
 - Esc — back to the item list
 - PageUp/PageDown — scroll the focused preview/legend panel
@@ -293,8 +300,12 @@ Keys:
 - F5 — apply the saved F2 rule to the text of the item currently open in the
   editor, immediately; markers stay aligned (phrases that disappear are
   reported as warnings). The change is not written until you press Ctrl+S.
-- F8 — view context: focus the current item's table (fills the file
-  filter and clears the search) and jump the cursor to that item's row
+- F8 — view context: jump the current item into its own table. It fills the
+  file filter, clears the search, and sets the index-range filter to a small
+  window (current index ± 15) so the item's row is always visible on screen
+  without scrolling. The range box shows e.g. `135-165`; the notification
+  reports the exact item index, and you can widen the range with Ctrl+Alt+L to
+  read more context above/below
 - Ctrl+Q — quit
 
 The preview panel highlights the current search query inside the plain VN text
