@@ -371,6 +371,33 @@ def _tuned_spans(store, base, rid, key):
     return out
 
 
+def tuned_times(store, base, rid):
+    """Return the ``times_`` markers for one rid from tag_tuning.json.
+
+    ``times_`` carries the voice/text-reveal pacing: each marker is
+    ``(time, wait, start, end)`` where ``time`` is seconds, ``wait`` a bool and
+    ``start``/``end`` the character offsets (usually equal) in the VN text at
+    which the engine pauses. Returns an empty list when the rid has none.
+    """
+    try:
+        entries = (store.tuned or {}).get("files", {}).get(base, {})
+    except Exception:
+        return []
+    for _k, rec in entries.items():
+        if rec.get("id_") != rid:
+            continue
+        out = []
+        for item in rec.get("times_", []) or []:
+            el = item.get("Element", item)
+            try:
+                out.append((float(el["time_"]), bool(el["wait_"]),
+                            int(el["start_"]), int(el["end_"])))
+            except (KeyError, ValueError, TypeError):
+                continue
+        return out
+    return []
+
+
 def _load_markers(store, file, ids, vn):
     """Merge highlight phrase markers + player position from decisions/overrides."""
     base = file[:-len(".msg")]

@@ -131,6 +131,7 @@ def merge(existing, fresh):
 
 
 SPAN_KEYS = ("bolds_", "colors_", "words_", "names_")
+TIME_KEYS = ("times_",)
 
 
 def _apply_overrides(entries, overrides, base):
@@ -146,6 +147,10 @@ def _apply_overrides(entries, overrides, base):
     (``color_``/``wordID_``/``type_``) is carried over from the old tuned span
     at the same index when available, so glossary links and colors survive.
 
+    ``times_`` (voice/text-reveal sync markers) is handled the same way but as
+    its own authority: an override for it replaces the tuned markers at the
+    given indices, keeping the ``time_``/``wait_`` metadata from the old marker.
+
     Returns the count of ranges stamped or dropped.
     """
     if not overrides:
@@ -160,6 +165,29 @@ def _apply_overrides(entries, overrides, base):
         id_over = file_over.get(rid)
         if not id_over:
             continue
+        for k in TIME_KEYS:
+            kmap = id_over.get(k)
+            if kmap is None:
+                continue
+            if not kmap:
+                rec.pop(k, None)
+                n_stamped += 1
+                continue
+            old_items = rec.get(k, [])
+            new_items = []
+            for idx, (ns, ne) in kmap.items():
+                idx = int(idx)
+                meta = {}
+                if idx < len(old_items):
+                    old = old_items[idx].get("Element", old_items[idx])
+                    meta = {m: v for m, v in old.items()
+                            if m not in ("start_", "end_")}
+                elem = dict(meta)
+                elem["start_"] = str(int(ns))
+                elem["end_"] = str(int(ne))
+                new_items.append({"Element": elem})
+                n_stamped += 1
+            rec[k] = new_items
         for k in SPAN_KEYS:
             kmap = id_over.get(k)
             old_spans = rec.get(k, [])

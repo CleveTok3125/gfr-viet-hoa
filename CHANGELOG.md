@@ -11,6 +11,13 @@
   highlight spans, and the committed `tag_tuning.json` snapshot has been
   regenerated (1101 markers across 15 scenario files). `src/fix_times_offsets.py`
   re-runs the same pass after future translation changes.
+- **Editor: manual voice-sync (`times_`) editing.** The preview now shows a
+  `Sync:` line with the item's sync markers (`@offset` + wait time), and the
+  new **F6** action opens an inline panel where each marker's offset can be
+  edited by hand (e.g. when the automatic remap lands a sync point a word off).
+  Saving writes the offsets to `tag_overrides.json` under the new `times_` key;
+  `tag_tuning.write_to_game` stamps them onto the tuned tag tables at patch
+  time (overrides keep the marker's `time_`/`wait_` values).
 
 ## v0.6.0 - rebuild workflow, editor launcher & inline panels (2026-08-06)
 

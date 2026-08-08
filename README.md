@@ -307,6 +307,12 @@ Keys:
   without scrolling. The range box shows e.g. `135-165`; the notification
   reports the exact item index, and you can widen the range to read more
   context above/below
+- F6 — edit the current item's voice-sync (`times_`) markers. The preview
+  shows a `Sync:` line with each marker (`@offset` + wait time); F6 opens an
+  inline panel with an editable offset per marker. Saving writes the offsets
+  to `tag_overrides.json` (key `times_`), which the patch stamps onto the
+  tuned tag tables — use it to fix a sync point by hand when the automatic
+  remap lands slightly off.
 - Ctrl+Q — quit
 
 The preview panel highlights the current search query inside the plain VN text
