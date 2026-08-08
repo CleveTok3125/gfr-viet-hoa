@@ -1,5 +1,30 @@
 # Changelog
 
+## v0.6.0 - rebuild workflow, editor launcher & inline panels (2026-08-06)
+
+- **`gfrpatch --rebuild`.** Restores the install to its pristine state from the
+  apply-time backup, applies the patch again from scratch, then writes a fresh
+  release manifest (the same action as `verify.py --gen`) instead of
+  hash-verifying against the old one — useful after translation changes shift
+  references. Requires a backup (run a normal patch first) and exits with code
+  2 otherwise.
+- **`gfrpatch edit` subcommand.** Launches the interactive TUI translation
+  editor (`src/tr_edit.py`) with optional `--game` / `--file`, so the patcher
+  entrypoint also serves as the editor launcher.
+- **Editor: replace-rule and option panels are inline, not pop-ups.** The F2
+  search & replace dialog is no longer a modal screen; instead it renders
+  inline in the bottom-left panel (replacing the legend while open). Because it
+  lives in the normal app tree, you can keep navigating items while it is open,
+  and the live preview re-evaluates for whichever item is current. A reusable
+  inline-slot mechanism (`open_slot`/`close_slot` + `SlotMenu`) supports future
+  option menus the same way.
+- **Editor: Ctrl+M copies one field.** Ctrl+M opens an inline menu to copy just
+  the current item's file, or just its ID (previously it copied the whole
+  FILE/ID/SPEAKER/EN/VN block).
+- **Editor: Ctrl+K views context.** Fills the file filter with the current
+  item's table, clears the search to list all of that table's rows, and jumps
+  the cursor to the captured item's row (exact file/en match, ID fallback).
+
 ## v0.5.9 - captain/Dragon Knight scenes, session replace rule & JA reference (2026-08-06)
 
 - **Translations.** Rewrote the **White Dragon Knights** gallant characters
