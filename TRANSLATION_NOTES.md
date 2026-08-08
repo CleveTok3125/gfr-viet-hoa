@@ -33,20 +33,24 @@ nào cho đúng*.
   trong editor:
   - Preview hiện dòng **`Sync:`** (vd `@8 1.00s wait  @40 2.00s`) liệt kê các
     marker của dòng đang mở.
-  - Dòng **`VN (plain):`** tô nền xanh nhạt đúng **dấu câu** nơi chữ dừng
+- Dòng **`VN (plain):`** tô nền xanh nhạt đúng **dấu câu** nơi chữ dừng
     (thường là `.`, `,`, `...`). Khi bật **F4 (EN+)**, dòng EN cũng được tô
     tương tự. Nếu điểm dừng tô nhầm vào chữ thường giữa từ là dấu hiệu offset
     bị lệch.
-  - Thanh stats dưới editor có **`before cursor Nch`**: số ký tự (không tính
-    xuống dòng) trước con trỏ, dùng để nhập offset thủ công; đặt con trỏ đúng
-    chỗ dừng rồi đọc số này.
+  - Thanh stats dưới editor có **`offset to type Nch`**: chính là giá trị cần
+    nhập vào ô offset trong panel F9 — bằng index (tính cả xuống dòng) trong
+    bản dịch thuần của ký tự ngay sau vị trí dừng mong muốn, tức đặt con trỏ vào
+    dấu câu thì số hiển thị là index dấu câu **+1** (engine dừng ở `offset-1`).
 - **Sửa bằng tay qua F9.** Nhấn **F9** mở panel liệt kê từng marker với ô
   offset có thể chỉnh. Mỗi marker có `@time ...s` (thời gian nghỉ, chỉ đọc).
-  Điểm ngắt thường là dấu câu; offset nhập vào là **vị trí của dấu câu đó**
-  (lấy từ `before cursor` khi đặt con trỏ vào dấu câu). Bấm **Save** để ghi
+  Điểm ngắt thường là dấu câu; theo quy ước engine, **offset = ký tự đầu tiên
+  SAU điểm dừng** (dừng giữa `offset-1` và `offset`), vậy để ngắt tại dấu câu
+  có index P phải nhập `P+1`. Preview/Panel hiển thị offset dạng này và tô
+  chính dấu câu P (ở `offset-1`). Bấm **Save** để ghi
   vào `tag_overrides.json` (key `times_`), preview cập nhật ngay; sau đó phải
-  **rebuild patch** để game nhận thay đổi. Chỉ chỉnh khi remap tự động đặt sai
-  chỗ — bản dịch giữ nguyên dấu câu và nhịp câu thường không cần đụng tới.
+  **rebuild patch** để game nhận thay đổi. Chỉ chỉnh khi remap tự động đặt
+  sai chỗ — bản dịch giữ nguyên dấu câu và nhịp câu thường không cần đụng
+  tới.
 
 ## The Captain (Gran/Djeeta)
 
@@ -72,5 +76,31 @@ Cách xưng hô trong tiếng Việt cần trung tính về giới, theo quy t�
   (file này) viết bằng tiếng Việt để người dịch tra cứu nhanh.
 - Mỗi thay đổi dịch lớn nên ghi vào CHANGELOG.md và cập nhật manifest nếu đụng
   tới table (`build_patch.py` / `verify.py` sẽ nhắc).
+
+## Báo cáo tiến độ (Progress report)
+
+Bảng theo dõi trạng thái hoàn thành từng chương. Đánh dấu `x` vào ô đã hoàn
+thành, để `-` cho mục chưa làm.
+
+| Chapter (EN)                     | Chương (VI)                      | Hội thoại  | Highlight  | Voice-sync (times_)  | Glossary (gần nhất)  | Đảm bảo chất lượng  |
+|--------------------------------- |--------------------------------- |:---------: |:---------: |:-------------------: |:-------------------: |:------------------: |
+| `Into the Conflux`               | Vào Conflux                      |     x      |     x      |          x           |          x           |          x          |
+| `Echoes of Scorn`                | Những Tiếng Vọng Khinh Miệt      |     x      |     x      |          x           |          x           |          x          |
+| `A Trial of Two Eternities`      | Thử Thách Của Hai Cõi Vĩnh Hằng  |     x      |     x      |          x           |          x           |          x          |
+| `Ragnalia, the Heralds of Doom`  | Ragnalia, Sứ Giả Của Diệt Vong   |     x      |     x      |          x           |          x           |          x          |
+| `Becoming Fatebreakers`          | Trở Thành Kẻ Phá Số Mệnh         |     x      |     x      |          x           |          x           |          x          |
+| `Every End Has a Beginning`      | Mọi Kết Thúc Đều Có Khởi Đầu     |     x      |     x      |          -           |          -           |          -          |
+| `My Power Is Yours`              | Sức Mạnh Của Ta Là Của Ngươi     |     x      |     x      |          -           |          -           |          -          |
+| `Bursting with Power`            | Tràn Đầy Sức Mạnh                |     x      |     x      |          -           |          -           |          -          |
+
+- **Hội thoại:** toàn bộ dialogue của chương đã dịch.
+- **Highlight:** mục `decisions.json` / `tag_overrides.json` cho các dòng trong
+  chương đã được rà soát và khớp với text hiện tại.
+- **Voice-sync (times_):** các marker `times_` đã kiểm tra (chỉ cần đụng tay
+  khi remap tự động đặt sai điểm ngắt; xem quy tắc F9 ở trên).
+- **Glossary:** thuật ngữ của chương (tên riêng, kỹ năng, địa danh) đã thống
+  nhất theo glossary.
+- **Đảm bảo chất lượng:** văn phong tự nhiên, marker/`{p}` giữ nguyên, dòng
+  dài khớp bản EN để đồng bộ highlight và hội thoại.
 
 ## TODO

@@ -314,15 +314,19 @@ Keys:
   inline panel with an editable offset per marker. Saving writes the offsets
   to `tag_overrides.json` (key `times_`), which the patch stamps onto the
   tuned tag tables — use it to fix a sync point by hand when the automatic
-  remap lands slightly off. The char where a marker pauses is tinted on both
-  the VN and the EN+ preview so you can see where the reveal stops
+  remap lands slightly off. The engine convention is that the offset indexes
+  the first character *after* the pause (i.e. the reveal pauses between
+  `offset-1` and `offset`), so a pause at punctuation `P` is written as
+  `P+1`; the char where the marker actually pauses (`offset-1`) is tinted on
+  both the VN and the EN+ preview so you can see where the reveal stops
 - Ctrl+Q — quit
 
 The status line below the editor shows the live word/char counts, the cursor
-position (`before cursor Nch`, counting visible characters up to the caret),
-the longest-line width and the `EN wrap Nch` reference. Notifications (save
-confirmation, warnings) appear as toasts just above the status line so the
-edits below are never covered.
+position (`offset to type Nch` — the plain-VN index — newlines counted — of
+the char right after the caret + 1, i.e. exactly the value to type into the
+F9 sync panel to pause at the caret's char), the longest-line width and the
+`EN wrap Nch` reference. Notifications (save confirmation, warnings) appear
+as toasts just above the status line so the edits below are never covered.
 
 The preview panel highlights the current search query inside the plain VN text
 (reverse video), shows the original Japanese (`JA (raw)`) below it for
