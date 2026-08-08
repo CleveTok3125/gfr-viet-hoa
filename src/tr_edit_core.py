@@ -390,8 +390,10 @@ def tuned_times(store, base, rid):
 
     ``times_`` carries the voice/text-reveal pacing: each marker is
     ``(time, wait, start, end)`` where ``time`` is seconds, ``wait`` a bool and
-    ``start``/``end`` the character offsets (usually equal) in the VN text at
-    which the engine pauses. Returns an empty list when the rid has none.
+    ``start``/``end`` the character offsets (usually equal) in the VN text.
+    The engine pauses right BEFORE ``start`` (it is the first character of the
+    next reveal segment); the pause point itself sits at ``start - 1``.
+    Returns an empty list when the rid has none.
 
     Offsets edited by hand (``store.overrides[base][rid]["times_"]``) replace
     the tuned snapshot values at the same index, so the editor always shows
