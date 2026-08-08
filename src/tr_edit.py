@@ -475,6 +475,10 @@ class TrEditApp(App):
     #table {
         height: 1fr;
     }
+    ToastRack {
+        margin-bottom: 5;
+        align: right bottom;
+    }
     #editor_head {
         height: 1;
         color: $text;
@@ -1020,7 +1024,7 @@ class TrEditApp(App):
         # (inclusive) so both conventions highlight the punctuation.
         marks = {}
         for off in sync_offs:
-            j = off
+            j = min(off, len(vn) - 1)
             while j >= 0 and vn[j].isspace():
                 j -= 1
             if j >= 0:
