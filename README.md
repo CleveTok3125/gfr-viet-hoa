@@ -293,7 +293,7 @@ Keys:
 - F5 — apply the saved F2 rule to the text of the item currently open in the
   editor, immediately; markers stay aligned (phrases that disappear are
   reported as warnings). The change is not written until you press Ctrl+S.
-- Ctrl+K — view context: focus the current item's table (fills the file
+- F8 — view context: focus the current item's table (fills the file
   filter and clears the search) and jump the cursor to that item's row
 - Ctrl+Q — quit
 

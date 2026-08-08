@@ -21,7 +21,7 @@
 - **Editor: Ctrl+M copies one field.** Ctrl+M opens an inline menu to copy just
   the current item's file, or just its ID (previously it copied the whole
   FILE/ID/SPEAKER/EN/VN block).
-- **Editor: Ctrl+K views context.** Fills the file filter with the current
+- **Editor: F8 views context.** Fills the file filter with the current
   item's table, clears the search to list all of that table's rows, and jumps
   the cursor to the captured item's row (exact file/en match, ID fallback).
 

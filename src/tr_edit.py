@@ -23,7 +23,7 @@ Keys:
     F2                configure a regex search & replace rule (inline panel)
     F5                apply the F2 rule to the current item's text
     Ctrl+Up / Ctrl+Down  previous / next item
-    Ctrl+K                view context (focus table + jump to row)
+    F8                view context (focus table + jump to row)
     Esc               back to the item list
     Ctrl+Q            quit
 """
@@ -85,7 +85,7 @@ LEGEND = (
     "F2        configure a regex search & replace rule (session)\n"
     "F5        apply the F2 rule to the current item's text\n"
     "Ctrl+Up/Down  previous / next item\n"
-    "Ctrl+K    view context: focus the item's table and jump to its row\n"
+    "F8    view context: focus the item's table and jump to its row\n"
     "\n"
     "[b]Editor[/b]\n"
     "F3        auto-wrap current text to the EN wrap width\n"
@@ -130,10 +130,10 @@ class ReplacePanel(Vertical):
         app = self.app_ref
         rx = getattr(app, "replace_rule", None)
         if rx is not None:
-            self.query_one("#replace_pattern", Input).value = rx["pattern"]
-            self.query_one("#replace_repl", Input).value = rx["repl"]
-            self.query_one("#replace_case", Checkbox).value = rx["case"]
-            self.query_one("#replace_word", Checkbox).value = rx["word"]
+            self.query_one("#replace_pattern", Input).value = rx.get("pattern", "")
+            self.query_one("#replace_repl", Input).value = rx.get("repl", "")
+            self.query_one("#replace_case", Checkbox).value = rx.get("case", False)
+            self.query_one("#replace_word", Checkbox).value = rx.get("word", False)
         self.query_one("#replace_pattern", Input).focus()
         self.count()
 
@@ -372,7 +372,7 @@ class TrEditApp(App):
         padding: 0 1;
     }
     #replace_panel {
-        height: 1fr;
+        height: auto;
     }
     #replace_panel #replace-title {
         text-style: bold;
@@ -407,15 +407,17 @@ class TrEditApp(App):
         overflow-y: auto;
     }
     #replace-actions {
-        height: 3;
+        height: auto;
         align: right middle;
+        margin-top: 1;
     }
     #replace-actions Button {
-        height: 3;
-        min-height: 3;
-        border: round $primary;
+        height: 1;
+        min-height: 1;
+        min-width: 8;
+        border: none;
         margin-left: 1;
-        padding: 0 1;
+        padding: 0 2;
     }
     #inline_panel SlotMenu {
         height: 1fr;
@@ -428,16 +430,28 @@ class TrEditApp(App):
         height: auto;
         margin: 1 0;
     }
-    #copy-actions {
-        height: 3;
-        align: right middle;
-    }
-    #copy-actions Button {
+    SlotMenu RadioButton {
         height: 3;
         min-height: 3;
-        border: round $primary;
-        margin-left: 1;
+        padding: 0 2;
+        margin-bottom: 1;
+    }
+    SlotMenu RadioButton > .radio--label {
         padding: 0 1;
+        text-style: bold;
+    }
+    #copy-actions {
+        height: auto;
+        align: right middle;
+        margin-top: 1;
+    }
+    #copy-actions Button {
+        height: 1;
+        min-height: 1;
+        min-width: 8;
+        border: none;
+        margin-left: 1;
+        padding: 0 2;
     }
     """
 
@@ -463,7 +477,7 @@ class TrEditApp(App):
         Binding("f5", "apply_replace", "Apply rule", show=False),
         Binding("ctrl+up", "prev_item", "Prev item", show=False),
         Binding("ctrl+down", "next_item", "Next item", show=False),
-        Binding("ctrl+k", "view_context", "Context", show=False),
+        Binding("f8", "view_context", "Context", show=False),
         Binding("ctrl+q", "quit", "Quit", show=False),
     ]
 
@@ -477,6 +491,8 @@ class TrEditApp(App):
         else:
             self.base = ""   # empty = browse all tables
         self._search_timer = None
+        self._search_armed_query = ""
+        self._skip_search_debounce = False
         self.items = []            # filtered Item list in table order
         self.current_key = None    # (file, en) currently in the editor
         self.current_item = None   # Item currently in the editor
@@ -564,16 +580,29 @@ class TrEditApp(App):
         # RowHighlighted that Textual still emits for the old row afterwards.
         self._suppress_highlight = True
         sel_key = keep_key
-        if not sel_key and self.dirty and self.current_key is not None:
+        if not sel_key and self.current_key is not None:
             sel_key = (self.current_key[0], self.current_key[1])
-        if sel_key and sel_key in self.rows_by_key:
-            try:
-                table.move_cursor(row=table.get_row_index(sel_key))
-            except Exception:
-                pass
+        if sel_key:
+            skey = sel_key[0] + "\u0000" + sel_key[1]
+        else:
+            skey = None
+        if skey and skey in self.rows_by_key:
+            # Locate the row index by scanning self.items on the (file, en)
+            # string key. get_row_index fails silently (RowDoesNotExist) when
+            # duplicate (file, en) rows collapse the dict lookup, leaving the
+            # cursor stranded at the previous row after clear()+repopulate.
+            skey = sel_key[0] + "\u0000" + sel_key[1]
+            target_idx = next((i for i, r in enumerate(self.items)
+                               if r.file + "\u0000" + r.en == skey), None)
+            if target_idx is None:
+                try:
+                    target_idx = table.get_row_index(sel_key)
+                except Exception:
+                    target_idx = None
+            if target_idx is not None:
+                table.move_cursor(row=target_idx)
             if not self.dirty:
-                self.load_item(self.rows_by_key[sel_key[0] + "\u0000"
-                                                + sel_key[1]])
+                self.load_item(self.rows_by_key[skey])
         elif found:
             table.move_cursor(row=0)
             self.current_key = None
@@ -656,6 +685,20 @@ class TrEditApp(App):
         self._loaded = editor.text
         self.dirty = False
         self.update_editor_stats()
+        self._refresh_panel()
+
+    def _refresh_panel(self) -> None:
+        """Re-evaluate any open inline panel (e.g. ReplacePanel) for the new
+        current item, so live counts/previews follow item switches."""
+        slot = self.query_one("#inline_panel", Vertical)
+        if "hidden" in slot.classes:
+            return
+        for child in slot.children:
+            if isinstance(child, ReplacePanel):
+                try:
+                    child.count()
+                except Exception:
+                    pass
 
     def _rich_esc(self, s: str) -> str:
         """Escape rich-markup metacharacters in ``s`` for a Static.update.
@@ -972,6 +1015,21 @@ class TrEditApp(App):
         it = self.current_item
         target_ids = set(it.ids)
         key = (it.file, it.en)
+        # Cancel a pending debounced search so its delayed refresh_table cannot
+        # run after us and reset the cursor back to the first row.
+        if self._search_timer is not None:
+            self._search_timer.stop()
+            self._search_timer = None
+            self._search_armed_query = ""
+        # Suppress the async Input.Changed that clearing the box below posts;
+        # without it on_search re-arms a timer that fires a redundant refresh
+        # ~0.6s later, briefly slamming the scroll back to the top before it
+        # scrolls to the target row again (a visible blink).
+        self._skip_search_debounce = True
+        # The async Input.Changed for the cleared box is delivered in the next
+        # message batch; reset the guard after it has been processed so later
+        # real searches are still debounced.
+        self.set_timer(0.1, lambda: setattr(self, "_skip_search_debounce", False))
         self.base = it.file[:-len(".msg")]
         self.query_one("#file", Input).value = self.base
         search = self.query_one("#search", Input)
@@ -980,19 +1038,22 @@ class TrEditApp(App):
         self.refresh_table()
         if self.dirty:
             return
-        target = None
-        # prefer an exact (file, en) match so items without an id still land
-        target = self.rows_by_key.get(key[0] + "\u0000" + key[1])
-        if target is not None:
+        table = self.query_one("#table", DataTable)
+        # Move to the exact (file, en) row when present. We index self.items
+        # (which mirror the table rows in order) by their (file, en) string
+        # key rather than relying on an identity scan, which would miss
+        # duplicate (file, en) entries, or on get_row_index, whose internal
+        # row key can differ from rows_by_key on such duplicates.
+        skey = key[0] + "\u0000" + key[1]
+        if skey in self.rows_by_key:
             for idx, row in enumerate(self.items):
-                if row is target:
-                    self.query_one("#table", DataTable).move_cursor(row=idx)
+                if row.file + "\u0000" + row.en == skey:
+                    table.move_cursor(row=idx)
                     self.load_item(row)
                     self.notify(f"Context: {self.base}.msg (#{idx})", timeout=2)
                     return
-        for idx, row in enumerate(self.items):
             if target_ids.intersection(row.ids):
-                self.query_one("#table", DataTable).move_cursor(row=idx)
+                table.move_cursor(row=idx)
                 self.load_item(row)
                 self.notify(f"Context: {self.base}.msg (#{idx})", timeout=2)
                 return
@@ -1058,16 +1119,32 @@ class TrEditApp(App):
     # -- filter inputs -----------------------------------------------------
 
     @on(Input.Changed, "#search")
-    def on_search(self, _event: Input.Changed) -> None:
+    def on_search(self, event: Input.Changed) -> None:
         # debounced search: refresh only after the user stops typing. A longer
         # delay avoids firing while the user is still hunting for characters
         # (slow typing with pauses longer than the threshold).
         if self._search_timer is not None:
             self._search_timer.stop()
+        # This Changed comes right after view_context cleared the box; its only
+        # purpose would be to refresh (which view_context already did), so skip
+        # arming a timer that would re-fire a redundant refresh later.
+        if self._skip_search_debounce:
+            self._search_timer = None
+            return
+        self._search_armed_query = event.input.value
         self._search_timer = self.set_timer(0.6, self._debounced_search)
 
     def _debounced_search(self) -> None:
-        if not self.dirty:
+        self._search_timer = None
+        if self._skip_search_debounce:
+            return
+        if self.query_one("#search", Input).value != self._search_armed_query:
+            return
+        # Only drop the selection reset policy when there is a real search
+        # query. A cleared box (empty query, e.g. after view_context) must keep
+        # the current item so refresh_table re-selects it instead of snapping
+        # the cursor back to the first row.
+        if self.query_one("#search", Input).value and not self.dirty:
             self.current_key = None
         self.refresh_table()
 
