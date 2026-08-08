@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased - voice/text-sync timing fix
+
+- **Voice sync / text-reveal timing fixed.** The dialogue `*_tag.msg` tables
+  carry `times_` markers (char offset + wait time) that pace the text reveal
+  against the spoken line. Their offsets were computed against the original
+  English string and were never remapped, so after translation they pointed at
+  the wrong character (or past the end) and the reveal drifted from the voice.
+  `remap_tags.py` now remaps `times_` offsets to the Vietnamese text like the
+  highlight spans, and the committed `tag_tuning.json` snapshot has been
+  regenerated (1101 markers across 15 scenario files). `src/fix_times_offsets.py`
+  re-runs the same pass after future translation changes.
+
 ## v0.6.0 - rebuild workflow, editor launcher & inline panels (2026-08-06)
 
 - **`gfrpatch --rebuild`.** Restores the install to its pristine state from the

@@ -457,10 +457,15 @@ It diffs the English sources (extracted from `data.i`) against the installed
   contains a button-icon token (e.g. a controller/gamepad key glyph), the icon
   may appear in the wrong position or not render at all. The tag remap handles
   `<d>` and `{placeholder}` markers, but icon tokens need a dedicated pass.
-- **Voice sync may drift in some dialogues.** Because the translated text is
-  often shorter or longer than the original, lip-sync/voice timing can be off in
-  a few scenes. This is inherent to text length changes and is cosmetic — the
-  dialogue wording itself is unaffected.
+- **Voice sync / text-reveal timing.** Dialogue `*_tag.msg` tables carry
+  `times_` markers (a character offset, a wait time and a wait flag) that pace
+  the text-reveal against the spoken line. Their offsets index the original
+  (English) string, so after translation they point at the wrong character and
+  the reveal drifts from the voice. `src/fix_times_offsets.py` rewrites every
+  `times_` offset to the matching position in the Vietnamese text (EN→VN char
+  map), exactly like the highlight spans; run it with `--game <install>
+  --write` after a big translation pass, then the tuned tags are already
+  correct. Cosmetic — the wording itself is unaffected.
 - **Residual highlight drift on heavily-translated terms.** Dialogue name
   highlights are driven by `*_tag.msg` character offsets, which are remapped
   to the Vietnamese text at patch time. For proper nouns that are kept

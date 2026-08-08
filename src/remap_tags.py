@@ -164,6 +164,54 @@ def remap_dynamics(vn_text, colors, items):
     return changed
 
 
+def remap_times(vn_text, items, en_text=None, mapping=None):
+    """Rewrite times_ start_/end_ to VN text positions.
+
+    times_ entries carry the text-reveal / voice-sync pacing: each marker holds
+    ``time_`` (seconds), ``wait_`` (wait flag) and the character offset
+    (``start_`` == ``end_``) in the string where the engine pauses the text to
+    stay in sync with the voice line. The offsets are computed against the
+    original (EN) text, so once the string is translated they no longer point
+    at the right character. We remap each marker's offset from the EN text to
+    the VN text via the EN->VN char map (anchor interpolation), keeping the
+    ``time_``/``wait_`` values untouched. Returns the number of changed
+    entries.
+    """
+    if not items or not en_text or not vn_text:
+        return 0
+    m = mapping if mapping is not None else char_map(en_text, vn_text)
+    changed = 0
+    for item in items:
+        el = item.get("Element")
+        if not el:
+            continue
+        try:
+            start = int(el["start_"])
+            end = int(el["end_"])
+        except (KeyError, ValueError, TypeError):
+            continue
+        # zero-length marker -> remap the single position
+        est = _interpolate(en_text, vn_text, m, start, end)
+        if est is None:
+            # no aligned anchors: fall back to a proportional estimate
+            if len(en_text) == 0:
+                continue
+            ratio = len(vn_text) / len(en_text)
+            est = (round(start * ratio), round(end * ratio))
+        ns, ne = est
+        ns = max(0, min(len(vn_text), ns))
+        ne = max(ns, min(len(vn_text), ne))
+        if start == end:
+            # keep point markers as points (game expects start_ == end_)
+            pos = round((ns + ne) / 2)
+            ns = ne = max(0, min(len(vn_text), pos))
+        if el.get("start_") != str(ns) or el.get("end_") != str(ne):
+            el["start_"] = str(ns)
+            el["end_"] = str(ne)
+            changed += 1
+    return changed
+
+
 def load_tag(path):
     with open(path, "rb") as fh:
         return msgpack.unpackb(fh.read(), raw=False)
@@ -506,6 +554,17 @@ def remap_tag_file(game_dir, rel_text, rel_tag, tag_blob, en_text, vn_text,
         if el.get("dynamics_"):
             colors = el.get("colors_") or []
             changed += remap_dynamics(vn_txt, colors, el["dynamics_"])
+        if el.get("times_"):
+            # voice/text sync markers: offsets index the EN string, so remap
+            # them to the VN text using the EN tag as ground truth.
+            if en_el is not None:
+                en_times = en_el.get("times_")
+                if en_times:
+                    src_txt = en_text.get((rid, subid), "") if en_text else ""
+                    if src_txt:
+                        m0 = char_map(src_txt, vn_txt)
+                        changed += remap_times(vn_txt, el["times_"],
+                                               src_txt, m0)
         if en_el is None:
             # no EN ground truth -> span ranges left untouched
             skipped += 1
