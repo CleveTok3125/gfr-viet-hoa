@@ -27,11 +27,26 @@ nào cho đúng*.
 - **Không tự ý thêm/xóa `{p}`.** Dấu `{p}` là vị trí chèn tên người chơi, do
   game chèn lúc runtime; chỉ được di chuyển đến đúng vị trí tên người chơi
   xuất hiện trong câu, không xóa tùy tiện.
-- **Voice-sync (`times_`) hiếm khi cần đụng tay.** Editor hiện dòng `Sync:` ở
-  preview và phím **F9** cho phép sửa offset của từng marker đồng bộ giọng
-  (vị trí ký tự trong text VN nơi chữ tạm dừng). Chỉ chỉnh khi bản dịch khiến
-  chữ hiện lệch nhịp với giọng mà remap tự động đặt sai chỗ; sau khi sửa phải
-  rebuild patch để game nhận thay đổi.
+- **Voice-sync (`times_`) hiếm khi cần đụng tay.** Mỗi dòng thoại có thể có
+  một số marker `times_` đánh dấu điểm chữ hiện dừng để khớp nhịp với giọng:
+  mỗi marker mang thời gian nghỉ (giây) và vị trí ký tự trong text. Cách đọc
+  trong editor:
+  - Preview hiện dòng **`Sync:`** (vd `@8 1.00s wait  @40 2.00s`) liệt kê các
+    marker của dòng đang mở.
+  - Dòng **`VN (plain):`** tô nền xanh nhạt đúng **dấu câu** nơi chữ dừng
+    (thường là `.`, `,`, `...`). Khi bật **F4 (EN+)**, dòng EN cũng được tô
+    tương tự. Nếu điểm dừng tô nhầm vào chữ thường giữa từ là dấu hiệu offset
+    bị lệch.
+  - Thanh stats dưới editor có **`before cursor Nch`**: số ký tự (không tính
+    xuống dòng) trước con trỏ, dùng để nhập offset thủ công; đặt con trỏ đúng
+    chỗ dừng rồi đọc số này.
+- **Sửa bằng tay qua F9.** Nhấn **F9** mở panel liệt kê từng marker với ô
+  offset có thể chỉnh. Mỗi marker có `@time ...s` (thời gian nghỉ, chỉ đọc).
+  Điểm ngắt thường là dấu câu; offset nhập vào là **vị trí của dấu câu đó**
+  (lấy từ `before cursor` khi đặt con trỏ vào dấu câu). Bấm **Save** để ghi
+  vào `tag_overrides.json` (key `times_`), preview cập nhật ngay; sau đó phải
+  **rebuild patch** để game nhận thay đổi. Chỉ chỉnh khi remap tự động đặt sai
+  chỗ — bản dịch giữ nguyên dấu câu và nhịp câu thường không cần đụng tới.
 
 ## The Captain (Gran/Djeeta)
 
