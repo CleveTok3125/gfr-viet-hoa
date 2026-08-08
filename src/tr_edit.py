@@ -239,20 +239,21 @@ class TimesPanel(Vertical):
     """Inline panel: view / adjust the item's ``times_`` voice-sync markers.
 
     Hosted in the bottom-left slot like ReplacePanel. Each marker is shown as a
-    row with an editable ``offset`` input (the character position in the VN
-    text where the engine pauses); ``time`` / ``wait`` are read-only reference.
-    Saving writes the offsets to tag_overrides.json (key ``times_``), which
+    row with an editable ``offset`` input (the character *after* the pause: the
+    engine pauses right before it, showing everything up to ``offset - 1``);
+    ``time`` / ``wait`` are read-only reference. Saving writes the offsets to
+    tag_overrides.json (key ``times_``), which
     ``tag_tuning.write_to_game`` stamps onto the tuned tag at patch time.
     """
 
-    def __init__(self, app, markers, rid):
+    def __init__(self, app, markers, rids):
         super().__init__(id="times_panel")
         self.app_ref = app
-        self.rid = rid
+        self.rids = rids
         self.markers = list(markers)
 
     def compose(self) -> ComposeResult:
-        yield Static(f"[b]Voice-sync[/b] ({self.rid})  [dim]Save auto[/dim]",
+        yield Static(f"[b]Voice-sync[/b] ({', '.join(self.rids)})  [dim]Save auto[/dim]",
                      id="times-title")
         with ScrollableContainer(id="times-scroll"):
             for i, (time, wait, start, end) in enumerate(self.markers):
@@ -289,8 +290,9 @@ class TimesPanel(Vertical):
                 return
             off = int(inp)
             out[str(i)] = [off, off]
-        ov = app.store.overrides.setdefault(base, {}).setdefault(self.rid, {})
-        ov["times_"] = out
+        for rid in self.rids:
+            ov = app.store.overrides.setdefault(base, {}).setdefault(rid, {})
+            ov["times_"] = out
         app.store.save_all()
         self.notify(f"Saved {len(out)} voice-sync marker(s) - rebuild the "
                     "patch for the game to pick them up")
@@ -992,9 +994,10 @@ class TrEditApp(App):
         markers (``times_`` offsets) tinted a faint accent so the pause point
         is visible at a glance.
 
-        A ``times_`` marker offsets the character where the next reveal segment
-        begins; the actual pause is the punctuation right before it (usually a
-        ``.``/``,``/``...``), so each marker highlights that single character.
+        A ``times_`` marker offsets the first character of the *next* reveal
+        segment; the engine pauses right after the character before it, so the
+        actual pause sits at ``offset - 1``. Each marker tints that single
+        character so a translator can see the pause point at a glance.
         """
         q = self.query_one("#search", Input).value.strip()
         from tr_edit_core import _WILDCARD_RE, _wildcard_regex, _norm_ws
@@ -1016,15 +1019,15 @@ class TrEditApp(App):
                     i += len(qn)
         else:
             spans = []
-        # map each times_ offset to the pause character. A marker points at the
-        # character where the reveal pauses: the punctuation just before it
-        # (auto-remapped offsets land on the char after the punctuation) or the
-        # offset itself when it sits directly on the pause char (hand-edited
-        # via F9, where the value is the cursor position). Scan from the offset
-        # (inclusive) so both conventions highlight the punctuation.
+        # map each times_ offset to the pause character. The engine pauses
+        # right after the character at ``offset - 1`` (the first char of the
+        # *next* reveal segment is at ``offset``), so the tint sits there,
+        # walking back over any trailing space for a crisper marker.
         marks = {}
         for off in sync_offs:
-            j = min(off, len(vn) - 1)
+            if off <= 0:
+                continue
+            j = min(off - 1, len(vn) - 1)
             while j >= 0 and vn[j].isspace():
                 j -= 1
             if j >= 0:
@@ -1106,15 +1109,16 @@ class TrEditApp(App):
         wrap = max((len(line) for line in enc.split("\n")), default=0)
         # cursor offset in the editor text (newlines counted), then mapped to
         # the plain-VN index so markers ({p}, {c:..}) don't shift the count.
+        # Show vn_idx + 1: with the cursor on a character (e.g. a ``.``/`,`/
+        # ``?``), the times_ marker offset the engine expects is one PAST it
+        # (the pause lands at offset-1), so +1 is exactly the value to type.
         cur_off = sum(len(line) for line in lines[:row]) + row + col
         from tr_edit_core import vn_index_at
         vn_idx = vn_index_at(text, cur_off)
-        nls = text.count("\n", 0, cur_off)
-        before_visible = vn_idx - nls
         self.query_one("#editor_stats", Static).update(
             f"words {words} · chars {chars} · cursor {row + 1}:{col + 1} · "
             f"longest line {tallest}ch · EN wrap {wrap}ch · "
-            f"before cursor {before_visible + 1}ch")
+            f"offset to type {vn_idx + 1}")
 
     # -- actions -----------------------------------------------------------
 
@@ -1434,13 +1438,12 @@ class TrEditApp(App):
             return
         from tr_edit_core import tuned_times
         base = item.file[:-len(".msg")]
-        rid = next((r for r in item.ids if tuned_times(self.store, base, r)),
-                   None)
-        markers = tuned_times(self.store, base, rid) if rid else []
-        if not markers:
+        rids = [r for r in item.ids if tuned_times(self.store, base, r)]
+        if not rids:
             self.notify("This item has no voice-sync markers", severity="warning")
             return
-        self.open_slot(TimesPanel(self, markers, rid))
+        markers = tuned_times(self.store, base, rids[0])
+        self.open_slot(TimesPanel(self, markers, rids))
 
     def action_apply_replace(self) -> None:
         """Apply the session replace rule (F2) to the current editor text."""
