@@ -39,7 +39,6 @@ from textual.app import App, ComposeResult  # noqa: E402
 from textual.binding import Binding  # noqa: E402
 from textual.containers import (  # noqa: E402
     Horizontal, ScrollableContainer, Vertical)
-from textual.screen import ModalScreen  # noqa: E402
 from textual.widgets import (  # noqa: E402
     Button, Checkbox, DataTable, Footer, Header, Input, Label, RadioButton,
     RadioSet, Static, TextArea)
@@ -90,43 +89,38 @@ LEGEND = (
 )
 
 
-class ReplaceScreen(ModalScreen):
-    """Modal dialog: configure a regex search & replace rule for this session.
+class ReplacePanel(Vertical):
+    """Inline panel (hosted in #inline_panel): configure a regex replace rule.
 
-    The rule is stored on the app (``replace_rule``) and is NOT applied here;
-    pressing F5 while editing any item applies it to the current editor text.
+    Lives inside the app's bottom-left slot instead of a modal screen, so the
+    rest of the UI stays usable (you can switch items while it is open). The
+    rule is stored on the app (``replace_rule``); F5 applies it to the current
+    editor text.
     """
 
-    BINDINGS = [
-        Binding("escape", "close", "Close", show=False),
-        Binding("ctrl+s", "close", "Close", show=False),
-    ]
-
     def __init__(self, app):
-        super().__init__()
+        super().__init__(id="replace_panel")
         self.app_ref = app
 
     def compose(self) -> ComposeResult:
-        with Vertical(id="replace-dialog"):
-            yield Static("[b]Search & replace rule (session)[/b]",
-                         id="replace-title")
-            yield Static("Saved for this session. Press F5 while editing any "
-                         "item to apply it to the current text (Ctrl+S saves "
-                         "the result).", classes="replace-sub")
-            yield Label("Pattern (regex)")
-            yield Input(placeholder=r"e.g. tàu bay|thuyền trưởng",
-                        id="replace_pattern")
-            yield Label("Replacement")
-            yield Input(placeholder=r"e.g. phi thuyền", id="replace_repl")
-            with Horizontal(id="replace-opts"):
-                yield Checkbox("Match case", id="replace_case")
-                yield Checkbox("Whole word", id="replace_word")
-            yield Static("-", id="replace_count")
-            yield Static("", id="replace_preview")
-            with Horizontal(id="replace-actions"):
-                yield Button("Save rule", id="replace_do", variant="primary")
-                yield Button("Close", id="replace_close")
-        yield Footer()
+        yield Static("[b]Search & replace rule (session)[/b]",
+                     id="replace-title")
+        yield Static("Saved for this session. Press F5 while editing any "
+                     "item to apply it to the current text (Ctrl+S saves "
+                     "the result).", classes="replace-sub")
+        yield Label("Pattern (regex)")
+        yield Input(placeholder=r"e.g. tàu bay|thuyền trưởng",
+                    id="replace_pattern")
+        yield Label("Replacement")
+        yield Input(placeholder=r"e.g. phi thuyền", id="replace_repl")
+        with Horizontal(id="replace-opts"):
+            yield Checkbox("Match case", id="replace_case")
+            yield Checkbox("Whole word", id="replace_word")
+        yield Static("-", id="replace_count")
+        yield Static("", id="replace_preview")
+        with Horizontal(id="replace-actions"):
+            yield Button("Save rule", id="replace_do", variant="primary")
+            yield Button("Close", id="replace_close")
 
     def on_mount(self) -> None:
         app = self.app_ref
@@ -187,7 +181,7 @@ class ReplaceScreen(ModalScreen):
             prev.update("")
 
     def action_close(self) -> None:
-        self.dismiss(None)
+        self.app_ref.close_slot()
 
     @on(Button.Pressed)
     def _on_button(self, event: Button.Pressed) -> None:
@@ -220,7 +214,21 @@ class ReplaceScreen(ModalScreen):
             "word": self.query_one("#replace_word", Checkbox).value,
         }
         self.notify("Replace rule saved - press F5 to apply")
-        self.dismiss(None)
+        self.app_ref.close_slot()
+
+
+class SlotMenu(Vertical):
+    """Inline option menu hosted in #inline_panel (instead of a popup).
+
+    Subclasses provide the options (via ``compose`` / RadioSet or similar) and
+    call ``self.app_ref.close_slot()`` after picking. Everything here runs
+    inside the normal app tree, so navigation throughout the UI stays usable
+    while the menu is open.
+    """
+
+    def __init__(self, app):
+        super().__init__()
+        self.app_ref = app
 
 
 class TrEditApp(App):
@@ -271,6 +279,9 @@ class TrEditApp(App):
         color: $text-muted;
         padding: 0 1;
     }
+    #bottom_slot {
+        height: 1fr;
+    }
     #legend_sc {
         height: 1fr;
         border: round $secondary;
@@ -285,6 +296,15 @@ class TrEditApp(App):
     #legend {
         width: 1fr;
         height: auto;
+    }
+    #inline_panel {
+        height: 1fr;
+        border: round $accent;
+        padding: 0 1;
+        overflow-y: auto;
+    }
+    #inline_panel.hidden {
+        display: none;
     }
     #table {
         height: 1fr;
@@ -304,28 +324,18 @@ class TrEditApp(App):
         color: $text-muted;
         padding: 0 1;
     }
-    ReplaceScreen {
-        align: center middle;
+    #replace_panel {
+        height: 1fr;
     }
-    #replace-dialog {
-        width: 78;
-        max-width: 90%;
-        height: auto;
-        max-height: 90%;
-        padding: 1 2;
-        border: round $accent;
-        background: $surface;
-        layer: overlay;
-    }
-    #replace-title {
+    #replace_panel #replace-title {
         text-style: bold;
         margin-bottom: 1;
     }
-    .replace-sub {
+    #replace_panel .replace-sub {
         color: $text-muted;
         margin-bottom: 1;
     }
-    #replace-dialog Label {
+    #replace_panel Label {
         margin-top: 1;
     }
     #replace-opts {
@@ -359,6 +369,9 @@ class TrEditApp(App):
         border: round $primary;
         margin-left: 1;
         padding: 0 1;
+    }
+    #inline_panel SlotMenu {
+        height: 1fr;
     }
     """
 
@@ -421,8 +434,11 @@ class TrEditApp(App):
                     with ScrollableContainer(id="preview_sc"):
                         yield Static("(select an item)", id="preview")
                     yield Static("", id="hint")
-                    with ScrollableContainer(id="legend_sc"):
-                        yield Static(LEGEND, id="legend")
+                    with Vertical(id="bottom_slot"):
+                        with ScrollableContainer(id="legend_sc"):
+                            yield Static(LEGEND, id="legend")
+                        with Vertical(id="inline_panel", classes="hidden"):
+                            pass
                 with Vertical(classes="pane"):
                     yield DataTable(id="table", zebra_stripes=True,
                                     cursor_type="row")
@@ -884,8 +900,30 @@ class TrEditApp(App):
     def action_next_item(self) -> None:
         self._step_item(1)
 
+    # -- inline slot (replaces the legend panel, bottom-left) --------------
+
+    def open_slot(self, widget) -> None:
+        """Show a widget in #inline_panel, hiding the legend while it is open.
+
+        The widget lives in the normal app tree (not a modal screen), so item
+        navigation and all other bindings keep working while it is shown.
+        """
+        slot = self.query_one("#inline_panel", Vertical)
+        slot.remove_children()
+        slot.mount(widget)
+        slot.remove_class("hidden")
+        self.query_one("#legend_sc").display = False
+
+    def close_slot(self) -> None:
+        """Hide the inline slot and bring the legend back."""
+        slot = self.query_one("#inline_panel", Vertical)
+        slot.remove_children()
+        slot.add_class("hidden")
+        self.query_one("#legend_sc").display = True
+        self.action_focus_table()
+
     def action_open_replace(self) -> None:
-        self.push_screen(ReplaceScreen(self))
+        self.open_slot(ReplacePanel(self))
 
     def action_apply_replace(self) -> None:
         """Apply the session replace rule (F2) to the current editor text."""
