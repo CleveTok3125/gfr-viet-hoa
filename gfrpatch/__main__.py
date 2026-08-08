@@ -84,7 +84,7 @@ def main():
     args = ap.parse_args()
 
     if args.sub == "edit":
-        return run_editor(args.game, args.file)
+        return run_edit(args.game, args.file)
 
     game = pick_game_dir(args.game)
     if not game:
