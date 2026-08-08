@@ -70,7 +70,7 @@ LEGEND = (
     "Ctrl+J   raw Japanese (source for kanji / exact meaning)\n"
     "Ctrl+G   EN (original text)\n"
     "Ctrl+O   compound as in the editor (with markers)\n"
-    "Ctrl+M   item info (file / id / speaker / EN / VN)\n"
+    "Ctrl+M   copy just the file or just the ID (pick in the inline menu)\n"
     "Ctrl+H   full debug dump (ids, speaker, markers, decisions/overrides)\n"
     "\n"
     "[b]Preview[/b]\n"
@@ -82,6 +82,7 @@ LEGEND = (
     "F2        configure a regex search & replace rule (session)\n"
     "F5        apply the F2 rule to the current item's text\n"
     "Ctrl+Up/Down  previous / next item\n"
+    "Ctrl+K    view context: focus the item's table and jump to its row\n"
     "\n"
     "[b]Editor[/b]\n"
     "F3        auto-wrap current text to the EN wrap width\n"
@@ -231,6 +232,49 @@ class SlotMenu(Vertical):
         self.app_ref = app
 
 
+class CopyMenu(SlotMenu):
+    """Inline menu letting you copy just the file or just the ID."""
+
+    def __init__(self, app, item):
+        super().__init__(app)
+        self.item = item
+
+    def compose(self) -> ComposeResult:
+        yield Static("[b]Copy item: pick one field[/b]", id="copy-title")
+        yield RadioSet(
+            RadioButton("file", id="copy_file"),
+            RadioButton("ID", id="copy_id"),
+        )
+        with Horizontal(id="copy-actions"):
+            yield Button("Copy", id="copy_do", variant="primary")
+            yield Button("Cancel", id="copy_cancel")
+
+    @on(Button.Pressed)
+    def _on_button(self, event: Button.Pressed) -> None:
+        if event.button.id == "copy_cancel":
+            self.app_ref.close_slot()
+        elif event.button.id == "copy_do":
+            self._do_copy()
+
+    def _do_copy(self) -> None:
+        rs = self.query_one(RadioSet)
+        choice = None
+        for rb in rs.query(RadioButton):
+            if rb.value:
+                choice = rb.id
+                break
+        app = self.app_ref
+        if choice == "copy_file":
+            app._clip("file", self.item.file)
+        elif choice == "copy_id":
+            ids = ", ".join(self.item.ids) or "(no id)"
+            app._clip("ID", ids)
+        else:
+            app.notify("Pick file or ID", severity="warning")
+            return
+        app.close_slot()
+
+
 class TrEditApp(App):
     """Browse and edit translation items with inline markers."""
 
@@ -373,6 +417,25 @@ class TrEditApp(App):
     #inline_panel SlotMenu {
         height: 1fr;
     }
+    #copy-title {
+        text-style: bold;
+        margin-bottom: 1;
+    }
+    SlotMenu RadioSet {
+        height: auto;
+        margin: 1 0;
+    }
+    #copy-actions {
+        height: 3;
+        align: right middle;
+    }
+    #copy-actions Button {
+        height: 3;
+        min-height: 3;
+        border: round $primary;
+        margin-left: 1;
+        padding: 0 1;
+    }
     """
 
     BINDINGS = [
@@ -397,6 +460,7 @@ class TrEditApp(App):
         Binding("f5", "apply_replace", "Apply rule", show=False),
         Binding("ctrl+up", "prev_item", "Prev item", show=False),
         Binding("ctrl+down", "next_item", "Next item", show=False),
+        Binding("ctrl+k", "view_context", "Context", show=False),
         Binding("ctrl+q", "quit", "Quit", show=False),
     ]
 
@@ -778,17 +842,7 @@ class TrEditApp(App):
     def action_copy_item(self) -> None:
         if self.current_item is None:
             return
-        it = self.current_item
-        parts = [
-            f"FILE  : {it.file}",
-            f"ID    : {', '.join(it.ids) or '(no id)'}",
-            f"SPEAKER: {it.speaker or '(none)'}",
-            "EN:",
-            it.en,
-            "VN:",
-            it.vn,
-        ]
-        self._clip("Item", "\n".join(parts))
+        self.open_slot(CopyMenu(self, self.current_item))
 
     def action_copy_debug(self) -> None:
         if self.current_item is None:
@@ -899,6 +953,48 @@ class TrEditApp(App):
 
     def action_next_item(self) -> None:
         self._step_item(1)
+
+    def action_view_context(self) -> None:
+        """Jump to the selected item's context in the item list.
+
+        Fills the file filter with the current item's table, clears the search
+        so every row of that table is listed, then navigates the cursor to the
+        row whose ID matches the captured item.
+        """
+        if self.current_item is None or self.dirty:
+            if self.dirty:
+                self.notify("Editor has unsaved changes - Ctrl+S to save, "
+                            "Ctrl+R to discard", severity="warning", timeout=4)
+            return
+        it = self.current_item
+        target_ids = set(it.ids)
+        key = (it.file, it.en)
+        self.base = it.file[:-len(".msg")]
+        self.query_one("#file", Input).value = self.base
+        search = self.query_one("#search", Input)
+        if search.value:
+            search.value = ""
+        self.refresh_table()
+        if self.dirty:
+            return
+        target = None
+        # prefer an exact (file, en) match so items without an id still land
+        target = self.rows_by_key.get(key[0] + "\u0000" + key[1])
+        if target is not None:
+            for idx, row in enumerate(self.items):
+                if row is target:
+                    self.query_one("#table", DataTable).move_cursor(row=idx)
+                    self.load_item(row)
+                    self.notify(f"Context: {self.base}.msg (#{idx})", timeout=2)
+                    return
+        for idx, row in enumerate(self.items):
+            if target_ids.intersection(row.ids):
+                self.query_one("#table", DataTable).move_cursor(row=idx)
+                self.load_item(row)
+                self.notify(f"Context: {self.base}.msg (#{idx})", timeout=2)
+                return
+        self.notify("No row found for the captured ID", severity="warning",
+                    timeout=3)
 
     # -- inline slot (replaces the legend panel, bottom-left) --------------
 
