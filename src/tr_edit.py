@@ -251,10 +251,8 @@ class TimesPanel(Vertical):
         self.markers = list(markers)
 
     def compose(self) -> ComposeResult:
-        yield Static(f"[b]Voice-sync markers[/b] ({self.rid})",
+        yield Static(f"[b]Voice-sync[/b] ({self.rid})  [dim]Save auto[/dim]",
                      id="times-title")
-        yield Label("Offsets are character positions in the VN text where the "
-                    "text-reveal pauses. Edit an offset to fix a drift.")
         with ScrollableContainer(id="times-scroll"):
             for i, (time, wait, start, end) in enumerate(self.markers):
                 with Horizontal(classes="times-row"):
@@ -488,7 +486,7 @@ class TrEditApp(App):
     #times_panel .times-row {
         height: auto;
         align: left middle;
-        margin-top: 1;
+        margin-top: 0;
     }
     #times_panel .times-row Input {
         width: 6;
