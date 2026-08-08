@@ -46,6 +46,7 @@ from textual.containers import (  # noqa: E402
 from textual.widgets import (  # noqa: E402
     Button, Checkbox, DataTable, Footer, Header, Input, Label, RadioButton,
     RadioSet, Static, TextArea)
+from textual.suggester import Suggester  # noqa: E402
 from textual import on  # noqa: E402
 
 from common import bootstrap  # noqa: E402
@@ -353,6 +354,33 @@ class CopyMenu(SlotMenu):
             app.notify("Pick file or ID", severity="warning")
             return
         app.close_slot()
+
+
+class PrefixSuggester(Suggester):
+    """Shell-style completion for a filter input.
+
+    Suggests the first candidate that starts with the typed value (case
+    insensitive). The ghost text shows in the input and the built-in
+    right-arrow binding accepts it. ``candidates`` is a callable returning the
+    list (evaluated lazily so it reflects current data), or a plain list.
+    """
+
+    def __init__(self, candidates):
+        super().__init__(case_sensitive=False, use_cache=False)
+        self._candidates = candidates
+
+    def _list(self):
+        return self._candidates() if callable(self._candidates) \
+            else self._candidates
+
+    async def get_suggestion(self, value):
+        if not value:
+            return None
+        v = value.strip().lower()
+        for c in self._list():
+            if c.lower().startswith(v) and c.lower() != v:
+                return c
+        return None
 
 
 class TrEditApp(App):
@@ -663,9 +691,12 @@ class TrEditApp(App):
                             id="search")
                 yield Input(placeholder="index", id="range")
                 yield Input(placeholder="file base (e.g. text_scenario_030)",
-                            value=self.base, id="file")
-                yield Input(placeholder="ID", id="id")
-                yield Input(placeholder="Speaker", id="speaker")
+                            value=self.base, id="file",
+                            suggester=PrefixSuggester(self._file_bases))
+                yield Input(placeholder="ID", id="id",
+                            suggester=PrefixSuggester(self._all_ids))
+                yield Input(placeholder="Speaker", id="speaker",
+                            suggester=PrefixSuggester(self._speaker_names))
             with Horizontal(classes="main"):
                 with Vertical(classes="pane pane-left"):
                     with ScrollableContainer(id="preview_sc"):
@@ -1474,6 +1505,36 @@ class TrEditApp(App):
         if self.query_one("#search", Input).value and not self.dirty:
             self.current_key = None
         self.refresh_table()
+
+    # -- filter autocomplete ----------------------------------------------
+
+    def _file_bases(self):
+        """Sorted table basenames for the file filter suggestion."""
+        return sorted({f[:-len(".msg")] for f in self.store.tables})
+
+    def _all_ids(self):
+        """Sorted row ids for the ID filter suggestion (cached per store)."""
+        cache = getattr(self.store, "_id_suggest_cache", None)
+        if cache is None:
+            cache = self.store._id_suggest_cache = set()
+        if not cache and self.store.tables:
+            for file in self.store.tables:
+                if not file.startswith("text_scenario"):
+                    continue
+                rev = self.store.reverse_id_map(file)
+                for en in self.store.tables[file]:
+                    for rid in rev.get(en, []):
+                        cache.add(rid)
+        return sorted(cache)
+
+    def _speaker_names(self):
+        """Sorted speaker display names for the Speaker filter suggestion."""
+        names = set()
+        for rec in (self.store.speakers or {}).values():
+            for k in ("name_en", "name_ko", "chara"):
+                if rec.get(k):
+                    names.add(rec[k])
+        return sorted(names)
 
     @on(Input.Changed, "#file")
     def on_file(self, event: Input.Changed) -> None:
