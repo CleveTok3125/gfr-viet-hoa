@@ -194,7 +194,7 @@ class Store:
             rid = el.get("id_", "")
             subid = el.get("subid_", "")
             rec = {}
-            for k in ("bolds_", "colors_", "words_", "names_"):
+            for k in ("bolds_", "colors_", "words_", "names_", "times_"):
                 items = el.get(k) or []
                 spans = []
                 for it in items:
@@ -210,6 +210,20 @@ class Store:
                 out[(rid, subid)] = rec
         cache[file] = out
         return out
+
+    def en_times_offsets(self, file, ids):
+        """Return the ``times_`` marker offsets for one item, in EN-text space.
+
+        Reads the ``*_tag.msg`` EN reference (offset index the English string)
+        and returns the raw ``start_`` values for the first matching id, so the
+        EN+ preview can tint the same pause points as the VN line.
+        """
+        spans = self.en_tag_spans(file)
+        for rid in ids:
+            rec = spans.get((rid, ""))
+            if rec and rec.get("times_"):
+                return [s for s, _e in rec["times_"]]
+        return []
 
     # -- atomic writes -----------------------------------------------------
 
@@ -490,6 +504,48 @@ def _unesc(s):
     return s.replace("\\{", "{").replace("\\}", "}").replace("\\\\", "\\")
 
 
+def vn_index_at(compound, pos):
+    """Map a cursor offset in a compound editor string to the plain-VN index.
+
+    The compound is the VN text with inline markers (``{c:..}``/``{w:..}``/
+    ``{b:..}`` and the ``{p}`` player point) and escaped literals (``\\{``,
+    ``\\}``, ``\\\\``). ``times_`` offsets and the preview tint index the plain
+    VN text, so a cursor inside the compound must be translated back. Returns
+    the number of plain-VN characters (newlines counted) before ``pos``.
+    """
+    i = vn = 0
+    n = len(compound)
+    while i < n and i < pos:
+        c = compound[i]
+        if c == "\\" and i + 1 < n and compound[i + 1] in "{}":
+            if i + 2 <= pos:
+                vn += 1
+            i += 2
+            continue
+        if c == "\\" and i + 1 < n and compound[i + 1] == "\\":
+            if i + 2 <= pos:
+                vn += 1
+            i += 2
+            continue
+        if c == "{":
+            if compound.startswith("{p}", i):
+                i += 3
+                continue
+            m = HIGHLIGHT_RE.match(compound, i)
+            if m:
+                inner_s, inner_e = m.start(2), m.end(2)
+                if pos <= inner_s:
+                    i = pos
+                    continue
+                cut = min(pos, inner_e)
+                vn += len(_unesc(compound[inner_s:cut]))
+                i = max(cut, m.end())
+                continue
+        vn += 1
+        i += 1
+    return vn
+
+
 def build_compound(item, with_speaker=True):
     """Render an editable string: [Speaker] VN-with-markers.
 
@@ -589,6 +645,39 @@ def en_compound(store, item):
     else:
         out.append(tail)
     return "".join(out)
+
+
+def en_index_at(compound, plain, offset):
+    """Map an offset in the plain EN string to its position in the EN+ compound.
+
+    ``en_compound`` inserts ``{c:..}`` markers and a ``{p}`` point into the
+    plain EN text, so the ``times_`` offsets (indexed against plain EN) do not
+    line up with the compound's char positions. Walks the compound once, keeping
+    the plain-EN cursor, and returns the compound index where the plain char at
+    ``offset`` sits (or the end of the compound if the offset is past it).
+    """
+    if not compound:
+        return 0
+    i = 0          # compound index
+    p = 0          # plain-EN index
+    n = len(compound)
+    while i < n:
+        c = compound[i]
+        if c == "{":
+            m = HIGHLIGHT_RE.match(compound, i)
+            if m:
+                phrase = _unesc(m.group(2))
+                i += len(m.group(0))
+                p += len(phrase)
+                continue
+            if compound.startswith("{p}", i):
+                i += 3
+                continue
+        if p >= offset:
+            return i
+        p += 1
+        i += 1
+    return i
 
 
 def auto_wrap(compound, width):

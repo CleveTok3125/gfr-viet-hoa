@@ -13,7 +13,7 @@
   re-runs the same pass after future translation changes.
 - **Editor: manual voice-sync (`times_`) editing.** The preview now shows a
   `Sync:` line with the item's sync markers (`@offset` + wait time), and the
-  new **F6** action opens an inline panel where each marker's offset can be
+  new **F9** action opens an inline panel where each marker's offset can be
   edited by hand (e.g. when the automatic remap lands a sync point a word off).
   Saving writes the offsets to `tag_overrides.json` under the new `times_` key;
   `tag_tuning.write_to_game` stamps them onto the tuned tag tables at patch

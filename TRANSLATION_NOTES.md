@@ -28,7 +28,7 @@ nào cho đúng*.
   game chèn lúc runtime; chỉ được di chuyển đến đúng vị trí tên người chơi
   xuất hiện trong câu, không xóa tùy tiện.
 - **Voice-sync (`times_`) hiếm khi cần đụng tay.** Editor hiện dòng `Sync:` ở
-  preview và phím **F6** cho phép sửa offset của từng marker đồng bộ giọng
+  preview và phím **F9** cho phép sửa offset của từng marker đồng bộ giọng
   (vị trí ký tự trong text VN nơi chữ tạm dừng). Chỉ chỉnh khi bản dịch khiến
   chữ hiện lệch nhịp với giọng mà remap tự động đặt sai chỗ; sau khi sửa phải
   rebuild patch để game nhận thay đổi.
