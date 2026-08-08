@@ -274,7 +274,9 @@ Keys:
   enumeration
 - ID and Speaker filter boxes in the filter bar: typing in them keeps only
   rows whose row id / speaker matches (the bar reads search - range - file -
-  ID - Speaker, left to right)
+  ID - Speaker, left to right). The file, ID and Speaker boxes auto-complete:
+  press Right at the end of the line to accept the suggested value (Tab moves
+  focus)
 - Ctrl+N — next table file
 - Esc — back to the item list
 - PageUp/PageDown — scroll the focused preview/legend panel
@@ -312,8 +314,15 @@ Keys:
   inline panel with an editable offset per marker. Saving writes the offsets
   to `tag_overrides.json` (key `times_`), which the patch stamps onto the
   tuned tag tables — use it to fix a sync point by hand when the automatic
-  remap lands slightly off.
+  remap lands slightly off. The char where a marker pauses is tinted on both
+  the VN and the EN+ preview so you can see where the reveal stops
 - Ctrl+Q — quit
+
+The status line below the editor shows the live word/char counts, the cursor
+position (`before cursor Nch`, counting visible characters up to the caret),
+the longest-line width and the `EN wrap Nch` reference. Notifications (save
+confirmation, warnings) appear as toasts just above the status line so the
+edits below are never covered.
 
 The preview panel highlights the current search query inside the plain VN text
 (reverse video), shows the original Japanese (`JA (raw)`) below it for

@@ -18,6 +18,21 @@
   Saving writes the offsets to `tag_overrides.json` under the new `times_` key;
   `tag_tuning.write_to_game` stamps them onto the tuned tag tables at patch
   time (overrides keep the marker's `time_`/`wait_` values).
+- **Editor: pause-char tint.** The exact character where a `times_` marker
+  pauses the reveal is tinted on both the VN and the EN+ preview, so a
+  hand-fixed sync point is visually confirmed in place. Out-of-range markers
+  (a stale/preview offset past the end of the text) no longer crash the
+  preview — the scan is clamped to the text length.
+- **Editor: cursor char counter.** The status line now reports `before cursor
+  Nch` (visible characters up to the caret) next to the word/char counts, with
+  the editor stats on a dedicated line (auto-grown so the second line is never
+  clipped). The counter maps the plain-VN index, skipping inline markers.
+- **Editor: shell-style autocomplete.** The file, ID and speaker filter boxes
+  offer a tab-completable suggestion (Right accepts), sourced from the loaded
+  table names / row ids / speaker set.
+- **Editor: toasts above the footer.** Save confirmations and warnings now
+  render just above the editor status line instead of overlaying the input
+  area.
 
 ## v0.6.0 - rebuild workflow, editor launcher & inline panels (2026-08-06)
 
