@@ -21,9 +21,18 @@
 - **Editor: Ctrl+M copies one field.** Ctrl+M opens an inline menu to copy just
   the current item's file, or just its ID (previously it copied the whole
   FILE/ID/SPEAKER/EN/VN block).
-- **Editor: F8 views context.** Fills the file filter with the current
-  item's table, clears the search to list all of that table's rows, and jumps
-  the cursor to the captured item's row (exact file/en match, ID fallback).
+- **Editor: F8 views context by index range.** Fills the file filter with the
+  current item's table, clears the search, and sets a new index-range filter
+  (`Ctrl+Alt+L`, e.g. `100-120`) to a small window around the item (±15) so its
+  row is always visible on screen without scrolling the whole table, keeping
+  the item selected (no cursor jump). The notification reports the exact item
+  index. The range can be widened to read more of the surrounding dialogue.
+  A new `idx range` input sits left of the file filter and gates the table rows
+  by their enumeration index (shown in the `N` column).
+- **Editor: ID and Speaker filters.** Two new boxes on the right of the file
+  filter bar (search - range - file - ID - Speaker) keep only rows whose row
+  id / speaker match the typed text, combined with the existing search, file
+  and range filters.
 
 ## v0.5.9 - captain/Dragon Knight scenes, session replace rule & JA reference (2026-08-06)
 
