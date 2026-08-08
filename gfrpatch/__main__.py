@@ -45,6 +45,18 @@ def pick_game_dir(explicit):
         print(f"No data.i found under {answer!r}; try again.")
 
 
+def run_edit(game, file):
+    """Launch the TUI editor (src/tr_edit.py) as a child process."""
+    src = os.path.join(REPO, "src", "tr_edit.py")
+    cmd = [sys.executable, src]
+    if game:
+        cmd += ["--game", game]
+    if file:
+        cmd += ["--file", file]
+    print("Launching editor: " + " ".join(cmd))
+    return os.execv(sys.executable, cmd)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--game", help="path to the game install (asked if omitted)")
@@ -57,7 +69,22 @@ def main():
     ap.add_argument("--restore", action="store_true",
                     help="restore the game to its pristine state from the "
                          "backup made by a previous apply run")
+    ap.add_argument("--rebuild", action="store_true",
+                    help="restore to pristine, re-apply the patch, then write a "
+                         "fresh release manifest (gen_manifest) instead of "
+                         "hash-verifying against the old one")
+    sub = ap.add_subparsers(dest="sub", metavar="subcommand")
+    ep = sub.add_parser(
+        "edit", help="launch the interactive TUI translation editor (tr_edit)",
+        description="Launch the interactive TUI editor for text + highlight "
+                    "markers (src/tr_edit.py).")
+    ep.add_argument("--game", help="path to the game install (for EN/JA reference)")
+    ep.add_argument("--file", default=None,
+                    help="initial table basename, e.g. text_scenario_030")
     args = ap.parse_args()
+
+    if args.sub == "edit":
+        return run_editor(args.game, args.file)
 
     game = pick_game_dir(args.game)
     if not game:
@@ -72,6 +99,18 @@ def main():
     if args.restore:
         restore(game, index, backup_dir)
         sys.exit(0)
+
+    # --rebuild: return to pristine state first, then re-apply from scratch.
+    # The resulting install is by construction correct, so we finish by writing
+    # a fresh manifest (verify --gen) instead of hash-checking the old one.
+    if args.rebuild:
+        if not os.path.isfile(backup_index):
+            print(f"No backup in {backup_dir} - cannot rebuild a pristine state. "
+                  "Run a normal patch first.")
+            sys.exit(2)
+        restore(game, index, backup_dir)
+        args.skip_backup = True
+        print("Rebuild: restored to pristine state.")
 
     if not args.skip_backup and os.path.isfile(backup_index):
         cur_md5 = md5_file(index)
@@ -121,15 +160,19 @@ def main():
     report(results)
 
     if results["corrupt_tables"] == 0:
-        mism = verify(game)
-        if mism is None:
-            print("Note: no release manifest - run build_patch.py once to generate "
-                  "data/release_manifest.json for hash verification.")
-        elif mism:
-            print(f"HASH VERIFY FAILED: {len(mism)} file(s) differ from the "
-                  "reference manifest; restore backups and re-apply.")
+        if args.rebuild:
+            from verify import gen_manifest
+            gen_manifest(game)
         else:
-            print("Hash verify: OK (all files match the reference manifest).")
+            mism = verify(game)
+            if mism is None:
+                print("Note: no release manifest - run build_patch.py once to generate "
+                      "data/release_manifest.json for hash verification.")
+            elif mism:
+                print(f"HASH VERIFY FAILED: {len(mism)} file(s) differ from the "
+                      "reference manifest; restore backups and re-apply.")
+            else:
+                print("Hash verify: OK (all files match the reference manifest).")
 
     if results["patched"] == 0 and results["corrupt_tables"] == 0:
         print("Nothing to patch - install already up to date.")
