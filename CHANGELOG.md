@@ -11,6 +11,14 @@
   highlight spans, and the committed `tag_tuning.json` snapshot has been
   regenerated (1101 markers across 15 scenario files). `src/fix_times_offsets.py`
   re-runs the same pass after future translation changes.
+- **Engine pause convention documented.** `times_` markers index the first
+  character *after* the pause: the reveal pauses between `offset-1` and
+  `offset`, so a pause at punctuation index `P` is stored as `P+1`. The editor
+  stats now show `offset to type` (the cursor's char index + 1) instead of a
+  raw `before cursor` count, the preview tint sits on the pause char
+  (`offset-1`), and 35 hand-fixed markers in `tag_overrides.json` that had been
+  written "on" the punctuation (pausing a character early) were shifted by +1.
+  The F9 sync panel still stores raw engine offsets.
 - **Editor: manual voice-sync (`times_`) editing.** The preview now shows a
   `Sync:` line with the item's sync markers (`@offset` + wait time), and the
   new **F9** action opens an inline panel where each marker's offset can be
@@ -24,9 +32,11 @@
   (a stale/preview offset past the end of the text) no longer crash the
   preview — the scan is clamped to the text length.
 - **Editor: cursor char counter.** The status line now reports `before cursor
-  Nch` (visible characters up to the caret) next to the word/char counts, with
-  the editor stats on a dedicated line (auto-grown so the second line is never
-  clipped). The counter maps the plain-VN index, skipping inline markers.
+  Nch` (the plain-VN index — newlines counted — of the char right after the
+  caret, matching the offset typed in the F9 sync panel) next to the word/char
+  counts, with the editor stats on a dedicated line (auto-grown so the second
+  line is never clipped). The counter maps the plain-VN index, skipping inline
+  markers.
 - **Editor: shell-style autocomplete.** The file, ID and speaker filter boxes
   offer a tab-completable suggestion (Right accepts), sourced from the loaded
   table names / row ids / speaker set.
