@@ -22,6 +22,7 @@ Keys:
     Ctrl+H        full debug dump
     F2                configure a regex search & replace rule (inline panel)
     F5                apply the F2 rule to the current item's text
+    F6                edit voice-sync (times_) markers for the current item
     Ctrl+Up / Ctrl+Down  previous / next item
     F8                view context (fill range box around the item + jump)
     Esc               back to the item list
@@ -83,9 +84,11 @@ LEGEND = (
     "PgUp/PgDn scroll the focused preview / legend panel\n"
     "Ctrl+F    search (EN / VN / ID; * ? wildcards; \\n = space)\n"
     "Ctrl+L    focus file filter; Tab moves through search/range/file/ID/Speaker\n"
-    "ID / Speaker  filter boxes; range holds e.g. N-N (index window)\n"    "Esc       clear search text, then back to the list\n"
+    "ID / Speaker  filter boxes; range holds e.g. N-N (index window)\n"
+    "Esc       clear search text, then back to the list\n"
     "F2        configure a regex search & replace rule (session)\n"
     "F5        apply the F2 rule to the current item's text\n"
+    "F6        edit voice-sync (times_) markers for the current item\n"
     "Ctrl+Up/Down  previous / next item\n"
     "F8        view context: fill the file + a small index-range window\n"
     "          around the current item and jump to its row (kept visible)\n"
@@ -229,6 +232,70 @@ class ReplacePanel(Vertical):
         }
         self.notify("Replace rule saved - press F5 to apply")
         self.app_ref.close_slot()
+
+
+class TimesPanel(Vertical):
+    """Inline panel: view / adjust the item's ``times_`` voice-sync markers.
+
+    Hosted in the bottom-left slot like ReplacePanel. Each marker is shown as a
+    row with an editable ``offset`` input (the character position in the VN
+    text where the engine pauses); ``time`` / ``wait`` are read-only reference.
+    Saving writes the offsets to tag_overrides.json (key ``times_``), which
+    ``tag_tuning.write_to_game`` stamps onto the tuned tag at patch time.
+    """
+
+    def __init__(self, app, markers, rid):
+        super().__init__(id="times_panel")
+        self.app_ref = app
+        self.rid = rid
+        self.markers = list(markers)
+
+    def compose(self) -> ComposeResult:
+        yield Static(f"[b]Voice-sync markers[/b] ({self.rid})",
+                     id="times-title")
+        yield Label("Offsets are character positions in the VN text where the "
+                    "text-reveal pauses. Edit an offset to fix a drift.")
+        with ScrollableContainer(id="times-scroll"):
+            for i, (time, wait, start, end) in enumerate(self.markers):
+                with Horizontal(classes="times-row"):
+                    yield Input(str(start), id=f"times_off_{i}")
+                    yield Static(f"[@time {time:.2f}s{' wait' if wait else ''}]",
+                                 classes="times-meta")
+        with Horizontal(id="times-actions"):
+            yield Button("Cancel", id="times_cancel")
+            yield Button("Save", id="times_do", variant="primary")
+
+    def on_mount(self) -> None:
+        self.query_one("#times_off_0", Input).focus()
+
+    @on(Button.Pressed)
+    def _on_button(self, event: Button.Pressed) -> None:
+        if event.button.id == "times_cancel":
+            self.app_ref.close_slot()
+        elif event.button.id == "times_do":
+            self._save()
+
+    def _save(self) -> None:
+        app = self.app_ref
+        item = app.current_item
+        if item is None:
+            app.close_slot()
+            return
+        base = item.file[:-len(".msg")]
+        out = {}
+        for i, (time, wait, start, end) in enumerate(self.markers):
+            inp = self.query_one(f"#times_off_{i}", Input).value.strip()
+            if not inp.isdigit():
+                self.notify(f"Offset {i} is not a number", severity="warning")
+                return
+            off = int(inp)
+            out[str(i)] = [off, off]
+        ov = app.store.overrides.setdefault(base, {}).setdefault(self.rid, {})
+        ov["times_"] = out
+        app.store.save_all()
+        self.notify(f"Saved {len(out)} voice-sync marker(s) - rebuild the "
+                    "patch for the game to pick them up")
+        app.close_slot()
 
 
 class SlotMenu(Vertical):
@@ -398,6 +465,56 @@ class TrEditApp(App):
     #replace_panel {
         height: auto;
     }
+    #times_panel {
+        height: auto;
+    }
+    #times_panel #times-title {
+        text-style: bold;
+        margin-bottom: 1;
+    }
+    #times_panel #times-scroll {
+        height: auto;
+        max-height: 8;
+        overflow-y: auto;
+        scrollbar-gutter: stable;
+        scrollbar-size: 1 1;
+    }
+    #times_panel Label {
+        color: $text-muted;
+        margin-top: 1;
+    }
+    #times_panel .times-row {
+        height: auto;
+        align: left middle;
+        margin-top: 1;
+    }
+    #times_panel .times-row Input {
+        width: 6;
+        min-width: 5;
+        height: 1;
+        min-height: 1;
+        border: none;
+        padding: 0 1;
+    }
+    #times_panel .times-meta {
+        color: $text-muted;
+        margin-left: 1;
+    }
+    #times_panel #times-actions {
+        height: auto;
+        align: right middle;
+        margin-top: 1;
+        width: auto;
+    }
+    #times_panel #times-actions Button {
+        height: 1;
+        min-height: 1;
+        width: 11;
+        min-width: 10;
+        border: none;
+        margin-left: 1;
+        padding: 0 2;
+    }
     #replace_panel #replace-title {
         text-style: bold;
         margin-bottom: 1;
@@ -505,6 +622,7 @@ class TrEditApp(App):
         Binding("f3", "auto_wrap", "Wrap", show=False),
         Binding("f2", "open_replace", "Replace rule", show=False),
         Binding("f5", "apply_replace", "Apply rule", show=False),
+        Binding("f6", "open_times", "Sync times", show=False),
         Binding("ctrl+up", "prev_item", "Prev item", show=False),
         Binding("ctrl+down", "next_item", "Next item", show=False),
         Binding("f8", "view_context", "Context", show=False),
@@ -737,6 +855,7 @@ class TrEditApp(App):
                 f"[b]EN{'+' if self._en_markers else ''}:[/b]\n{en_view}\n"
                 f"[b]VN (plain):[/b]\n{self._highlight_vn(item.vn)}\n"
                 f"[b]JA (raw):[/b]\n{self._rich_esc(self.store.ja_text(item.file, item.ids) or '(no JA)')}")
+        prev = self._append_times_preview(prev, item)
         self.query_one("#preview", Static).update(prev)
         self._remeasure_panel("preview_sc")
         spk = item.speaker or "(none)"
@@ -750,6 +869,28 @@ class TrEditApp(App):
         self.dirty = False
         self.update_editor_stats()
         self._refresh_panel()
+
+    def _append_times_preview(self, prev, item) -> None:
+        """Append a ``times_`` voice-sync line to the preview (if any markers).
+
+        The markers are read from tag_tuning.json (the tuned snapshot). Each is
+        shown as ``@offset time=Ns wait`` so a translator can spot sync points
+        and open the Times panel (F6) to fix an offset manually.
+        """
+        from tr_edit_core import tuned_times
+        for rid in item.ids:
+            markers = tuned_times(self.store, item.file[:-len(".msg")], rid)
+            if not markers:
+                continue
+            parts = []
+            for time, wait, start, end in markers:
+                label = f"@{start}" if start == end else f"@{start}-{end}"
+                parts.append(f"[b]{label}[/b] {time:.2f}s"
+                             + (" wait" if wait else ""))
+            if parts:
+                prev += f"\n[b]Sync:[/b]  " + "   ".join(parts)
+            break
+        return prev
 
     def _refresh_panel(self) -> None:
         """Re-evaluate any open inline panel (e.g. ReplacePanel) for the new
@@ -844,12 +985,18 @@ class TrEditApp(App):
         words = len(text.split())
         chars = len(text)
         row, col = editor.cursor_location
-        tallest = max((len(line) for line in text.split("\n")), default=0)
+        lines = text.split("\n")
+        before_len = sum(len(line) for line in lines[:row])
+        before_visible = before_len + col
+        offset = before_len + row + col
+        tallest = max((len(line) for line in lines), default=0)
         enc = self.current_item.en if self.current_item is not None else ""
         wrap = max((len(line) for line in enc.split("\n")), default=0)
         self.query_one("#editor_stats", Static).update(
             f"words {words} · chars {chars} · cursor {row + 1}:{col + 1} · "
-            f"longest line {tallest}ch · EN wrap {wrap}ch")
+            f"longest line {tallest}ch · EN wrap {wrap}ch\n"
+            f"before cursor: {before_visible} ch (no \\n) · "
+            f"offset incl \\n {offset}")
 
     # -- actions -----------------------------------------------------------
 
@@ -1160,6 +1307,22 @@ class TrEditApp(App):
 
     def action_open_replace(self) -> None:
         self.open_slot(ReplacePanel(self))
+
+    def action_open_times(self) -> None:
+        """Open the voice-sync (times_) editor for the current item."""
+        item = self.current_item
+        if item is None:
+            self.notify("No item open", severity="warning")
+            return
+        from tr_edit_core import tuned_times
+        base = item.file[:-len(".msg")]
+        rid = next((r for r in item.ids if tuned_times(self.store, base, r)),
+                   None)
+        markers = tuned_times(self.store, base, rid) if rid else []
+        if not markers:
+            self.notify("This item has no voice-sync markers", severity="warning")
+            return
+        self.open_slot(TimesPanel(self, markers, rid))
 
     def action_apply_replace(self) -> None:
         """Apply the session replace rule (F2) to the current editor text."""
