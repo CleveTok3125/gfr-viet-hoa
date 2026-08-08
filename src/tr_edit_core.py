@@ -372,28 +372,48 @@ def _tuned_spans(store, base, rid, key):
 
 
 def tuned_times(store, base, rid):
-    """Return the ``times_`` markers for one rid from tag_tuning.json.
+    """Return the ``times_`` markers for one rid, merging manual overrides.
 
     ``times_`` carries the voice/text-reveal pacing: each marker is
     ``(time, wait, start, end)`` where ``time`` is seconds, ``wait`` a bool and
     ``start``/``end`` the character offsets (usually equal) in the VN text at
     which the engine pauses. Returns an empty list when the rid has none.
+
+    Offsets edited by hand (``store.overrides[base][rid]["times_"]``) replace
+    the tuned snapshot values at the same index, so the editor always shows
+    what will actually be written at patch time.
     """
     try:
         entries = (store.tuned or {}).get("files", {}).get(base, {})
     except Exception:
-        return []
+        entries = {}
+    out = []
     for _k, rec in entries.items():
         if rec.get("id_") != rid:
             continue
-        out = []
-        for item in rec.get("times_", []) or []:
+        override = {}
+        try:
+            override = (store.overrides or {}).get(base, {}).get(rid, {}) \
+                .get("times_", {}) or {}
+        except Exception:
+            override = {}
+        for i, item in enumerate(rec.get("times_", []) or []):
             el = item.get("Element", item)
             try:
-                out.append((float(el["time_"]), bool(el["wait_"]),
-                            int(el["start_"]), int(el["end_"])))
+                time = float(el["time_"])
+                wait = bool(el["wait_"])
             except (KeyError, ValueError, TypeError):
                 continue
+            ov = override.get(str(i))
+            if ov and len(ov) == 2:
+                start, end = int(ov[0]), int(ov[1])
+            else:
+                try:
+                    start = int(el["start_"])
+                    end = int(el["end_"])
+                except (KeyError, ValueError, TypeError):
+                    continue
+            out.append((time, wait, start, end))
         return out
     return []
 

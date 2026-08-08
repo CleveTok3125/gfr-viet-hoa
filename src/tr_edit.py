@@ -458,7 +458,7 @@ class TrEditApp(App):
         border: round $accent;
     }
     #editor_stats {
-        height: 1;
+        height: auto;
         color: $text-muted;
         padding: 0 1;
     }
@@ -986,17 +986,14 @@ class TrEditApp(App):
         chars = len(text)
         row, col = editor.cursor_location
         lines = text.split("\n")
-        before_len = sum(len(line) for line in lines[:row])
-        before_visible = before_len + col
-        offset = before_len + row + col
+        before_visible = sum(len(line) for line in lines[:row]) + col
         tallest = max((len(line) for line in lines), default=0)
         enc = self.current_item.en if self.current_item is not None else ""
         wrap = max((len(line) for line in enc.split("\n")), default=0)
         self.query_one("#editor_stats", Static).update(
             f"words {words} · chars {chars} · cursor {row + 1}:{col + 1} · "
-            f"longest line {tallest}ch · EN wrap {wrap}ch\n"
-            f"before cursor: {before_visible} ch (no \\n) · "
-            f"offset incl \\n {offset}")
+            f"longest line {tallest}ch · EN wrap {wrap}ch · "
+            f"before cursor {before_visible + 1}ch")
 
     # -- actions -----------------------------------------------------------
 
