@@ -74,20 +74,3 @@ Cách xưng hô trong tiếng Việt cần trung tính về giới, theo quy t�
   tới table (`build_patch.py` / `verify.py` sẽ nhắc).
 
 ## TODO
-
-### Làm rõ nhân xưng
-
-```
-FILE      : text_scenario_720.msg
-BASE      : text_scenario_720
-IDS       : SNT_WD720070_0110
-SPEAKER   : Katalina
-SPEAKERS  : {"SNT_WD720070_0110": {"chara": "PL0200", "voice": "VO_WD720070_PL0200_0110", "listener": 0, "emotion": 0, "name_ko": "카타리나", "name_en": "Katalina"}}
-EN        : "Hail! We've certainly earned our reputation! Hard to believe how far\nwe've come from your sleepy little island. Lead on, Captain!"
-VN (plain): "Hoan hô! Chúng ta đã thật sự kiếm được danh tiếng này! Khó tin khi chúng ta\nđã đi được xa từ hòn đảo buồn ngủ của anh. Dẫn đường đi, Thuyền trưởng!"
-COMPOUND  : "Hoan hô! Chúng ta đã thật sự kiếm được danh tiếng này! Khó tin khi chúng ta\nđã đi được xa từ hòn đảo buồn ngủ của anh. Dẫn đường đi, Thuyền trưởng!"
-HIGHLIGHTS: []
-PLAYER_POS: null
-DECISIONS : {}
-OVERRIDES : {}
-```

@@ -196,7 +196,7 @@
   "SNT_WD720040_0290": {
    "bolds_": {
     "0": [
-     "chúng tôi"
+     "bọn tôi"
     ]
    }
   },
@@ -1392,6 +1392,42 @@
    "words_": {
     "0": [
      "Ragnalia"
+    ]
+   }
+  },
+  "SNT_WD720020_0000": {
+   "colors_": {
+    "0": [
+     "Folca"
+    ]
+   },
+   "words_": {
+    "0": [
+     "Folca"
+    ]
+   }
+  },
+  "SNT_WD720020_0050": {
+   "colors_": {
+    "0": [
+     "Zegagrande"
+    ]
+   },
+   "words_": {
+    "0": [
+     "Zegagrande"
+    ]
+   }
+  },
+  "SNT_WD720020_0260": {
+   "colors_": {
+    "0": [
+     "Conflux"
+    ]
+   },
+   "words_": {
+    "0": [
+     "Conflux"
     ]
    }
   }
