@@ -16,7 +16,6 @@ Keys:
     Ctrl+R            discard current edit, reload from disk state
     Ctrl+F            focus search box (EN/VN/ID, case-insensitive)
     Ctrl+L            focus file filter (table basename)
-    Ctrl+Alt+L        focus index range filter (e.g. 100-120)
     Ctrl+N            next table file
     Ctrl+T/J/G/O  copy VN / JA / EN / compound
     Ctrl+M        copy just the file or just the ID (inline menu)
@@ -83,9 +82,8 @@ LEGEND = (
     "          ({c:}/{w:}/{b:} + {p} player-name insertion point)\n"
     "PgUp/PgDn scroll the focused preview / legend panel\n"
     "Ctrl+F    search (EN / VN / ID; * ? wildcards; \\n = space)\n"
-    "Ctrl+L, Ctrl+Alt+L  focus file / index-range filter (Ctrl+Alt+L=N-N)\n"
-    "ID / Speaker  filter boxes in the bar (filtrate table by id / speaker)\n"
-    "Esc       clear search text, then back to the list\n"
+    "Ctrl+L    focus file filter; Tab moves through search/range/file/ID/Speaker\n"
+    "ID / Speaker  filter boxes; range holds e.g. N-N (index window)\n"    "Esc       clear search text, then back to the list\n"
     "F2        configure a regex search & replace rule (session)\n"
     "F5        apply the F2 rule to the current item's text\n"
     "Ctrl+Up/Down  previous / next item\n"
@@ -114,22 +112,25 @@ class ReplacePanel(Vertical):
     def compose(self) -> ComposeResult:
         yield Static("[b]Search & replace rule (session)[/b]",
                      id="replace-title")
-        yield Static("Saved for this session. Press F5 while editing any "
-                     "item to apply it to the current text (Ctrl+S saves "
-                     "the result).", classes="replace-sub")
         yield Label("Pattern (regex)")
         yield Input(placeholder=r"e.g. tàu bay|thuyền trưởng",
                     id="replace_pattern")
         yield Label("Replacement")
         yield Input(placeholder=r"e.g. phi thuyền", id="replace_repl")
-        with Horizontal(id="replace-opts"):
-            yield Checkbox("Match case", id="replace_case")
-            yield Checkbox("Whole word", id="replace_word")
+        with Vertical(id="replace-grid"):
+            with Horizontal(classes="replace-row"):
+                yield Checkbox("Match case", id="replace_case")
+                yield Static("", classes="replace-fill")
+                yield Button("Close", id="replace_close")
+            with Horizontal(classes="replace-row"):
+                yield Checkbox("Whole word", id="replace_word")
+                yield Static("", classes="replace-fill")
+                yield Button("Save", id="replace_do", variant="primary")
         yield Static("-", id="replace_count")
         yield Static("", id="replace_preview")
-        with Horizontal(id="replace-actions"):
-            yield Button("Save rule", id="replace_do", variant="primary")
-            yield Button("Close", id="replace_close")
+        yield Static("Saved for this session. Press F5 while editing any "
+                     "item to apply it to the current text (Ctrl+S saves "
+                     "the result).", classes="replace-sub")
 
     def on_mount(self) -> None:
         app = self.app_ref
@@ -184,8 +185,12 @@ class ReplacePanel(Vertical):
         label.update(f"{n} match(es) in the current item")
         if n:
             repl = self.query_one("#replace_repl", Input).value
-            result, _subs, _warns = replace_in_compound(compound, rx, repl)
-            prev.update("[b]Preview:[/b]\n" + result)
+            try:
+                result, _subs, _warns = replace_in_compound(compound, rx, repl)
+            except re.error:
+                prev.update("invalid replacement")
+                return
+            prev.update(result)
         else:
             prev.update("")
 
@@ -399,18 +404,37 @@ class TrEditApp(App):
     }
     #replace_panel .replace-sub {
         color: $text-muted;
-        margin-bottom: 1;
+        margin-top: 1;
     }
     #replace_panel Label {
         margin-top: 1;
     }
-    #replace-opts {
+    #replace-grid {
         height: auto;
         margin-top: 1;
     }
-    #replace-opts Checkbox {
+    #replace-grid .replace-row {
         height: auto;
-        margin-right: 2;
+        align: left middle;
+        padding: 0 1;
+    }
+    #replace-grid .replace-fill {
+        width: 1fr;
+    }
+    #replace-grid Checkbox {
+        height: 1;
+        min-height: 1;
+        border: none;
+        margin-right: 1;
+        padding: 0 2;
+    }
+    #replace-grid Button {
+        height: 1;
+        min-height: 1;
+        width: 11;
+        border: none;
+        margin-left: 1;
+        padding: 0 2;
     }
     #replace_count {
         height: 1;
@@ -424,19 +448,6 @@ class TrEditApp(App):
         padding: 0 1;
         margin-top: 1;
         overflow-y: auto;
-    }
-    #replace-actions {
-        height: auto;
-        align: right middle;
-        margin-top: 1;
-    }
-    #replace-actions Button {
-        height: 1;
-        min-height: 1;
-        min-width: 8;
-        border: none;
-        margin-left: 1;
-        padding: 0 2;
     }
     #inline_panel SlotMenu {
         height: 1fr;
@@ -480,7 +491,6 @@ class TrEditApp(App):
         Binding("ctrl+e", "focus_editor", "Edit", show=True),
         Binding("ctrl+f", "focus_search", "Search", show=True),
         Binding("ctrl+l", "focus_file", "File", show=True),
-        Binding("ctrl+alt+l", "focus_range", "Range", show=True),
         Binding("ctrl+n", "next_file", "Next file", show=True),
         Binding("escape", "focus_table", "List", show=True),
         Binding("pagedown", "scroll_panel_down", "Panel dn", show=False),
@@ -533,7 +543,7 @@ class TrEditApp(App):
             with Horizontal(classes="filters"):
                 yield Input(placeholder="search EN / VN / ID (* ? wildcards)",
                             id="search")
-                yield Input(placeholder="N-N", id="range")
+                yield Input(placeholder="index", id="range")
                 yield Input(placeholder="file base (e.g. text_scenario_030)",
                             value=self.base, id="file")
                 yield Input(placeholder="ID", id="id")
@@ -1006,9 +1016,6 @@ class TrEditApp(App):
     def action_focus_file(self) -> None:
         self.query_one("#file", Input).focus()
 
-    def action_focus_range(self) -> None:
-        self.query_one("#range", Input).focus()
-
     def action_focus_table(self) -> None:
         search = self.query_one("#search", Input)
         if self.screen.focused is search and search.value:
@@ -1109,7 +1116,7 @@ class TrEditApp(App):
         self.refresh_table()
         if self.dirty:
             return
-        self.notify(f"Context: {self.base}.msg (item idx {idx})", timeout=2)
+        self.notify(f"Context: {self.base}.msg (item idx {idx})", timeout=6)
 
     def _enum_index_of(self, key) -> int:
         """Return the enumeration position of ``key=(file, en)`` inside its
@@ -1166,8 +1173,13 @@ class TrEditApp(App):
             return
         from tr_edit_core import replace_in_compound
         editor = self.query_one("#editor", TextArea)
-        new_compound, n_subs, warns = replace_in_compound(
-            editor.text, rule["rx"], rule["repl"])
+        try:
+            new_compound, n_subs, warns = replace_in_compound(
+                editor.text, rule["rx"], rule["repl"])
+        except re.error:
+            self.notify("Invalid replacement text - fix the F2 rule",
+                        severity="warning")
+            return
         if n_subs == 0:
             self.notify("Rule matched nothing in the current item",
                         severity="warning")

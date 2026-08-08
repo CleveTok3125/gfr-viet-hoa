@@ -23,7 +23,7 @@
   FILE/ID/SPEAKER/EN/VN block).
 - **Editor: F8 views context by index range.** Fills the file filter with the
   current item's table, clears the search, and sets a new index-range filter
-  (`Ctrl+Alt+L`, e.g. `100-120`) to a small window around the item (±15) so its
+  (e.g. `100-120`) to a small window around the item (±15) so its
   row is always visible on screen without scrolling the whole table, keeping
   the item selected (no cursor jump). The notification reports the exact item
   index. The range can be widened to read more of the surrounding dialogue.
