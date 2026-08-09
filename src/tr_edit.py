@@ -87,7 +87,7 @@ LEGEND = (
     "Ctrl+F    search (EN / VN / ID; * ? wildcards; \\n = space)\n"
     "Ctrl+L    focus file filter; Tab moves through search/range/file/ID/Speaker\n"
     "ID / Speaker  filter boxes; range holds e.g. N-N (index window)\n"
-    "Esc       clear search text, then back to the list\n"
+    "Esc       clear all filters (search/ID/Speaker/file/range)\n"
     "F2        configure a regex search & replace rule (session)\n"
     "F5        apply the F2 rule to the current item's text\n"
     "F9        edit voice-sync (times_) markers for the current item\n"
@@ -644,7 +644,7 @@ class TrEditApp(App):
         Binding("ctrl+f", "focus_search", "Search", show=True),
         Binding("ctrl+l", "focus_file", "File", show=True),
         Binding("ctrl+n", "next_file", "Next file", show=True),
-        Binding("escape", "focus_table", "List", show=True),
+        Binding("escape", "clear_filters", "Reset", show=True),
         Binding("pagedown", "scroll_panel_down", "Panel dn", show=False),
         Binding("pageup", "scroll_panel_up", "Panel up", show=False),
         Binding("ctrl+t", "copy_vn", "Copy VN", show=False),
@@ -677,6 +677,7 @@ class TrEditApp(App):
         self._search_armed_query = ""
         self._skip_search_debounce = False
         self._skip_range_sync = False
+        self._skip_filter_refresh = False
         self.range = None   # (start, end) inclusive, or None
         self.items = []            # filtered Item list in table order
         self.items_idx = []        # enumeration index per self.items entry
@@ -1295,13 +1296,26 @@ class TrEditApp(App):
         self.query_one("#file", Input).focus()
 
     def action_focus_table(self) -> None:
-        search = self.query_one("#search", Input)
-        if self.screen.focused is search and search.value:
-            search.value = ""
-            if not self.dirty:
-                self.current_key = None
-            self.refresh_table()
-            return
+        self.query_one("#table", DataTable).focus()
+
+    def action_clear_filters(self) -> None:
+        # ESC: clear every filter and return to the list. All inputs reset in
+        # one refresh (the per-input handlers are suppressed below) so the
+        # whole filtering state is wiped with a single pass.
+        self._skip_filter_refresh = True
+        self._skip_search_debounce = True
+        self._skip_range_sync = True
+        for ident in ("#search", "#id", "#speaker", "#file", "#range"):
+            self.query_one(ident, Input).value = ""
+        self.base = ""
+        self.range = None
+        if not self.dirty:
+            self.current_key = None
+        # release the flags on the next frame so real user edits refresh again
+        self.set_timer(0.1, lambda: setattr(self, "_skip_filter_refresh", False))
+        self.set_timer(0.1, lambda: setattr(self, "_skip_search_debounce", False))
+        self.set_timer(0.1, lambda: setattr(self, "_skip_range_sync", False))
+        self.refresh_table()
         self.query_one("#table", DataTable).focus()
 
     def action_next_file(self) -> None:
@@ -1553,6 +1567,8 @@ class TrEditApp(App):
     @on(Input.Changed, "#file")
     def on_file(self, event: Input.Changed) -> None:
         self.base = event.value.strip()
+        if self._skip_filter_refresh:
+            return
         if not self.dirty:
             self.current_key = None
         self.refresh_table()
@@ -1563,12 +1579,16 @@ class TrEditApp(App):
 
     @on(Input.Changed, "#id")
     def on_id(self, event: Input.Changed) -> None:
+        if self._skip_filter_refresh:
+            return
         if not self.dirty:
             self.current_key = None
         self.refresh_table()
 
     @on(Input.Changed, "#speaker")
     def on_speaker(self, event: Input.Changed) -> None:
+        if self._skip_filter_refresh:
+            return
         if not self.dirty:
             self.current_key = None
         self.refresh_table()
