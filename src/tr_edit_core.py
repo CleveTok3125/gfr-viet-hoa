@@ -25,6 +25,7 @@ import os
 import re
 import sys
 import copy
+import functools
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
@@ -297,9 +298,31 @@ _last_query = None
 _last_re = None
 _SPACE_RE = re.compile(r"\s+")
 
+# Vietnamese tone-placement variants: the same word may be typed with the
+# tone on the first vowel (old style, e.g. ``hủy``) or on the second vowel
+# (new style, e.g. ``huỷ``). Search normalizes both sides to the new-style
+# form so ``huỷ diệt`` still matches ``hủy diệt``. Markers here list the
+# first-vowel (old) variant mapped to its second-vowel (new) counterpart.
+VN_MAP = {
+    # uy
+    "ủy": "uỷ", "úy": "uý", "ùy": "uỳ", "ũy": "uỹ", "ụy": "uỵ",
+    # oe
+    "ỏe": "oẻ", "óe": "oé", "òe": "oè", "õe": "oẽ", "ọe": "oẹ",
+    # oa
+    "ỏa": "oả", "óa": "oá", "òa": "oà", "õa": "oã", "ọa": "oạ",
+}
+_VN_RE = re.compile("|".join(sorted(VN_MAP, key=len, reverse=True)))
 
-def _norm_ws(s):
-    """Collapse every run of whitespace (incl. newlines) to a single space."""
+
+@functools.lru_cache(maxsize=16384)
+def _norm_key(s):
+    """Lowercase, collapse whitespace and normalize Vietnamese tone mark
+    placement (``uy/oe/oa``) to the new-style second-vowel form.
+
+    The result is the shared search key: the query and every candidate are
+    run through the same fold, so ``huỷ diệt`` matches ``hủy diệt``.
+    """
+    s = _VN_RE.sub(lambda m: VN_MAP[m.group(0)], s.lower())
     return _SPACE_RE.sub(" ", s)
 
 
@@ -333,19 +356,19 @@ def search_hit(store, item, query):
 
     ``*`` and ``?`` act as wildcards (any run / any single character);
     otherwise the match is a plain substring test. Whitespace is normalised on
-    both sides, so a query typed with spaces matches text broken across line
-    breaks (``\\n`` is treated like a space).
+    both sides (``\\n`` treated like a space) and Vietnamese tone placement is
+    normalised to the new-style form, so ``huỷ`` matches ``hủy``.
     """
     if not query:
         return True
     if _WILDCARD_RE.search(query):
-        rx = _wildcard_regex(_norm_ws(query))
-        en = _norm_ws(item.en)
-        vn = _norm_ws(item.vn)
+        rx = _wildcard_regex(_norm_key(query))
+        en = _norm_key(item.en)
+        vn = _norm_key(item.vn)
         return bool(rx.search(en) or rx.search(vn)
                     or any(rx.search(rid) for rid in item.ids))
-    q = _norm_ws(query).lower()
-    if q in _norm_ws(item.en).lower() or q in _norm_ws(item.vn).lower():
+    q = _norm_key(query)
+    if q in _norm_key(item.en) or q in _norm_key(item.vn):
         return True
     return any(q in rid.lower() for rid in item.ids)
 
