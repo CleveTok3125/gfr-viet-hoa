@@ -23,6 +23,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src
 from common import bootstrap
 bootstrap()
 from common import load_translations, table_rel
+from release_build import stamp_release
 
 MANIFEST = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                         "data", "release_manifest.json")
@@ -49,9 +50,12 @@ def md5(path):
     return h.hexdigest()
 
 
+@stamp_release
 def gen_manifest(game_dir, out=MANIFEST):
-    manifest = {"build": load_translations()["meta"].get("build", "?"),
-                "files": {}}
+    meta = load_translations()["meta"]
+    manifest = {"build": meta.get("build", "?"), "files": {}}
+    if meta.get("build_vh"):
+        manifest["build_vh"] = meta["build_vh"]
     missing = []
     for rel in patched_files():
         p = os.path.join(game_dir, rel)
