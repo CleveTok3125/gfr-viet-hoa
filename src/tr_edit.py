@@ -1000,19 +1000,18 @@ class TrEditApp(App):
         character so a translator can see the pause point at a glance.
         """
         q = self.query_one("#search", Input).value.strip()
-        from tr_edit_core import _WILDCARD_RE, _wildcard_regex, _norm_ws
-        norm = _norm_ws(vn)
+        from tr_edit_core import _WILDCARD_RE, _wildcard_regex, _norm_key
+        norm = _norm_key(vn)
         if q:
             if _WILDCARD_RE.search(q):
-                rx = _wildcard_regex(_norm_ws(q))
+                rx = _wildcard_regex(_norm_key(q))
                 spans = [(m.start(), m.end()) for m in rx.finditer(norm)]
             else:
-                qn = _norm_ws(q).lower()
-                nl = norm.lower()
+                qn = _norm_key(q)
                 spans = []
                 i = 0
                 while True:
-                    i = nl.find(qn, i)
+                    i = norm.find(qn, i)
                     if i < 0:
                         break
                     spans.append((i, i + len(qn)))
