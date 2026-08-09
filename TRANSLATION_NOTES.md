@@ -89,7 +89,7 @@ thành, để `-` cho mục chưa làm.
 | `A Trial of Two Eternities`      | Thử Thách Của Hai Cõi Vĩnh Hằng  |     x      |     x      |          x           |          x           |          x          |
 | `Ragnalia, the Heralds of Doom`  | Ragnalia, Sứ Giả Của Diệt Vong   |     x      |     x      |          x           |          x           |          x          |
 | `Becoming Fatebreakers`          | Trở Thành Kẻ Phá Số Mệnh         |     x      |     x      |          x           |          x           |          x          |
-| `Every End Has a Beginning`      | Mọi Kết Thúc Đều Có Khởi Đầu     |     x      |     x      |          -           |          -           |          -          |
+| `Every End Has a Beginning`      | Mọi Kết Thúc Đều Có Khởi Đầu     |     x      |     x      |          x           |          x           |          x          |
 | `My Power Is Yours`              | Sức Mạnh Của Ta Là Của Ngươi     |     x      |     x      |          -           |          -           |          -          |
 | `Bursting with Power`            | Tràn Đầy Sức Mạnh                |     x      |     x      |          -           |          -           |          -          |
 
