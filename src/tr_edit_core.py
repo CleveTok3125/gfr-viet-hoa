@@ -293,6 +293,45 @@ def iter_items(store, bases=None, holds=None):
             yield it
 
 
+class ScanItem:
+    """Lightweight table row: enough to filter + render, no markers yet.
+
+    Used by the editor only (never escaped to disk). Markers/player_pos are
+    resolved lazily via :meth:`materialize` when an item is actually opened,
+    so a full-text table scan stays cheap.
+    """
+
+    __slots__ = ("file", "en", "vn", "ids", "speaker")
+
+    def __init__(self, store, file, en, vn):
+        self.file = file
+        self.en = en
+        self.vn = vn
+        rev = store.reverse_id_map(file)
+        self.ids = rev.get(en, [])
+        self.speaker = store.speaker_label(self.ids)
+
+    def materialize(self, store):
+        """Promote to a full :class:`Item` (loads markers for one row)."""
+        return Item(store, self.file, self.en, self.vn)
+
+
+def iter_scan(store, bases=None):
+    """Yield a :class:`ScanItem` for every row, skipping marker loading.
+
+    ``bases`` restricts to a set of table basenames. The reverse id map is
+    cached per file inside the store, so a full scan never re-reads a table.
+    """
+    tables = store.tables
+    bases = set(bases) if bases else None
+    for file, table in tables.items():
+        base = file[:-len(".msg")]
+        if bases is not None and base not in bases:
+            continue
+        for en, vn in table.items():
+            yield ScanItem(store, file, en, vn)
+
+
 _WILDCARD_RE = re.compile(r"[\*\?]")
 _last_query = None
 _last_re = None

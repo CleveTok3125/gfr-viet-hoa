@@ -53,7 +53,8 @@ from common import bootstrap  # noqa: E402
 bootstrap()
 
 from tr_edit_core import (  # noqa: E402
-    Store, iter_items, matches, build_compound, parse_compound, apply_edit)
+    Store, ScanItem, iter_scan, matches, build_compound, parse_compound,
+    apply_edit)
 
 MAX_ROWS = 3000
 CONTEXT_MARGIN = 15
@@ -742,12 +743,11 @@ class TrEditApp(App):
         q_id = self.query_one("#id", Input).value.strip().lower()
         q_sp = self.query_one("#speaker", Input).value.strip().lower()
         bases = {base} if base else None
-        held = {}
         lo, hi = self.range if self.range is not None else (None, None)
         found = []
         found_idx = []
         idx = 0
-        for it in iter_items(store, bases=bases, holds=held):
+        for it in iter_scan(store, bases=bases):
             # The range filters on the item's position in this table's (or the
             # whole-database) enumeration, stable regardless of the search
             # query, so view_context can compute it once and expand outwards.
@@ -880,6 +880,7 @@ class TrEditApp(App):
         self.load_item(item)
 
     def load_item(self, item) -> None:
+        item = self._full_item(item)
         self.current_key = (item.file, item.en)
         self.current_item = item
         self._render_preview(item)
@@ -894,6 +895,13 @@ class TrEditApp(App):
         self.dirty = False
         self.update_editor_stats()
         self._refresh_panel()
+
+    def _full_item(self, item):
+        """Materialize a light ScanItem into a full Item (once, cached)."""
+        if isinstance(item, ScanItem):
+            item = item.materialize(self.store)
+            self.rows_by_key[item.file + "\u0000" + item.en] = item
+        return item
 
     def _render_preview(self, item) -> None:
         ids = ", ".join(item.ids) or "(no id)"
@@ -1131,6 +1139,7 @@ class TrEditApp(App):
                                     + self.current_key[1])
         if item is None:
             return
+        item = self._full_item(item)
         warnings = apply_edit(self.store, item, compound)
         self.store.save_all()
         self.dirty = False
@@ -1149,6 +1158,7 @@ class TrEditApp(App):
                                     + self.current_key[1])
         if item is None:
             return
+        item = self._full_item(item)
         editor = self.query_one("#editor", TextArea)
         editor.text = build_compound(item, with_speaker=False)
         self._loaded = editor.text
@@ -1391,14 +1401,12 @@ class TrEditApp(App):
         table (matching the index column), or -1 if never encountered before
         MAX_ROWS scanning is impractical for a huge file header check.
         """
-        store = self.store
         base = key[0]
         if base.endswith(".msg"):
             base = base[:-len(".msg")]
         bases = {base} if base else None
-        held = {}
         idx = 0
-        for it in iter_items(store, bases=bases, holds=held):
+        for it in iter_scan(self.store, bases=bases):
             if it.file == key[0] and it.en == key[1]:
                 return idx
             idx += 1
