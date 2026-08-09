@@ -1,7 +1,7 @@
 {
  "build": "2.0.3",
  "files": {
-  "data.i": "1d5279dc537dc876daf502c96668afd8",
+  "data.i": "a26393bf7197bf769e7cea15aafc7d9e",
   "data/system/table/text/ko/text.msg": "d707784a36b72b9f22165562949b8384",
   "data/system/table/text/ko/text_tag.msg": "a0221156e7415cd278fad3d093e0e55e",
   "data/system/table/text/ko/text_badge.msg": "2bb5d1f6723d4b13558b403c8b664370",
@@ -22,11 +22,11 @@
   "data/system/table/text/ko/text_stage_tag.msg": "aa946f4869060468096daeac6a3db566",
   "data/system/table/text/ko/text_status.msg": "f5fb383a577258f07a8239269a101f04",
   "data/system/table/text/ko/text_status_tag.msg": "315967710715fccabb69678e4ed4d385",
-  "data/system/table/text/ko/text_story.msg": "e417c171056b2f1103d2d2c9fb9dea8b",
+  "data/system/table/text/ko/text_story.msg": "71b14ace4cbc73fb60bd023df4b98168",
   "data/system/table/text/ko/text_story_tag.msg": "c106a2d88db4a3da338b7dca25800772",
   "data/system/table/text/ko/text_tutorial.msg": "52814aae49b774e50fe0757d2e8beb8a",
   "data/system/table/text/ko/text_tutorial_tag.msg": "947e77bae366b268cffd136d7b572679",
-  "data/system/table/text/ko/text_ui.msg": "2307b6a7d0732811eb485283b3062b7c",
+  "data/system/table/text/ko/text_ui.msg": "7d192fa803e2f0e9127697978a3b6b59",
   "data/system/table/text/ko/text_ui_tag.msg": "badfbc497b82a054333f71739c4b30fb",
   "data/system/table/text/ko/text_uskill.msg": "ab7ced1d0d19fca777dfd1fdd415a465",
   "data/system/table/text/ko/text_uskill_tag.msg": "e7e0f6eef56921009d0d2f3f91202743",
@@ -130,7 +130,7 @@
   "data/system/table/scenario/ko/text_scenario_700_tag.msg": "2f3f1f8f1501d49f735976583649ab45",
   "data/system/table/scenario/ko/text_scenario_710.msg": "18fbd6d63782590678681575cd6ac681",
   "data/system/table/scenario/ko/text_scenario_710_tag.msg": "b4e966722884e7c2c9a0f6aab07614a1",
-  "data/system/table/scenario/ko/text_scenario_720.msg": "a9e31c08f8ae238eaded9663e733b51c",
+  "data/system/table/scenario/ko/text_scenario_720.msg": "f61ebaf8891c0f1f468f051eaeec9998",
   "data/system/table/scenario/ko/text_scenario_720_tag.msg": "2b7d74a2f1a77760f112516c213c26e2",
   "data/system/table/scenario/ko/text_scenario_730.msg": "c7ecfe3faa6c0b87f317c8c7072ff59e",
   "data/system/table/scenario/ko/text_scenario_730_tag.msg": "a210fbb4a4a47e0c9c1694e30e6b9ec7",
@@ -182,5 +182,5 @@
   "data/font/fttk_yoongothic750_1.wtb": "7927bbe36d2df2ad7a10e95e831e98a6",
   "data/font/fttk_yoongothic750_2.wtb": "8718bc114277b2378a18c604f8e8b68c"
  },
- "build_vh": "VH v2026.08.09.0850"
+ "build_vh": "VH v2026.08.09.1301"
 }
