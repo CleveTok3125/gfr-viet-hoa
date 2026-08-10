@@ -28,8 +28,8 @@ MANUAL_FIXES = {
         "Số lần kích hoạt +{1}\nSẵn sàng tái kích hoạt sau {2} giây"
     ),
     ("text.msg",
-     "DMG Taken from Debuffs -{0}%\nDebuff Duration -{1}%\n"
-     "Movement Restriction -{0}%"): (
+     ("DMG Taken from Debuffs -{0}%\nDebuff Duration -{1}%\n"
+      "Movement Restriction -{0}%")): (
         "S.THƯƠNG nhận từ trạng thái bất lợi -{0}%\n"
         "Thời gian hiệu ứng bất lợi -{1}%\n"
         "Hạn chế di chuyển -{0}%"
@@ -41,17 +41,17 @@ MANUAL_FIXES = {
         "Tấn Công +{0:.1f}% / giới hạn S.THƯƠNG +{1:.1f}%"
     ),
     ("text.msg",
-     "ATK +{0:.1f}% / DMG Cap +{1:.1f}%\n"
-     "If equipped weapon is transcended:\n"
-     "ATK +{5:.1f}% / DMG Cap +{6:.1f}%"): (
+     ("ATK +{0:.1f}% / DMG Cap +{1:.1f}%\n"
+      "If equipped weapon is transcended:\n"
+      "ATK +{5:.1f}% / DMG Cap +{6:.1f}%")): (
         "Tấn Công +{0:.1f}% / giới hạn S.THƯƠNG +{1:.1f}%\n"
         "Nếu vũ khí đang trang bị được siêu việt:\n"
         "Tấn Công +{5:.1f}% / giới hạn S.THƯƠNG +{6:.1f}%"
     ),
     ("text.msg",
-     "Grants Debuff Immunity for {0} sec. to the entire party\n"
-     "Realm of Ice: Also grants DMG\u2191 \n"
-     "({4}% to Katalina / {2}% to allies) for {3} sec."): (
+     ("Grants Debuff Immunity for {0} sec. to the entire party\n"
+      "Realm of Ice: Also grants DMG\u2191 \n"
+      "({4}% to Katalina / {2}% to allies) for {3} sec.")): (
         "Ban Miễn Trạng Thái Bất Lợi cho toàn đội trong {0} giây\n"
         "Cõi Băng Tuyết: Đồng thời ban S.THƯƠNG Cường Hóa \n"
         "({4}% cho Katalina / {2}% cho đồng đội) trong {3} giây."
@@ -60,8 +60,8 @@ MANUAL_FIXES = {
         "<d>{0}<d> yêu cầu đuổi một người chơi."
     ),
     ("text_ui.msg",
-     "You have a request to remove <d>{:s}<d> from the party.\n"
-     "Do you want to remove them?"): (
+     ("You have a request to remove <d>{:s}<d> from the party.\n"
+      "Do you want to remove them?")): (
         "Bạn nhận được yêu cầu đuổi <d>{:s}<d> khỏi tổ đội.\n"
         "Bạn có muốn đuổi họ không?"
     ),

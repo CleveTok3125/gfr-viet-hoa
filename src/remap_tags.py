@@ -19,12 +19,13 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 sys.path.insert(0, os.path.join(_HERE, ".."))
 
-from common import bootstrap  # noqa: E402
-bootstrap()
-import msgpack  # noqa: E402
+from common import bootstrap
 
-from extract import extract  # noqa: E402
-from common import TEXT_KO, SCENARIO_KO  # noqa: E402
+bootstrap()
+import msgpack
+
+from common import SCENARIO_KO, TEXT_KO
+from extract import extract
 
 WHITESPACE_RE = re.compile(r"\s+")
 WORD_RE = re.compile(r"\S+")
@@ -290,8 +291,7 @@ def best_match(sub, vn_text):
             best = (b.b, b.b + b.size, b.size, ratio)
     if best is None:
         return None
-    start, end, size, ratio = best
-    return start, end, ratio
+    return best[0], best[1], best[3]
 
 
 def _word_tokens(text):
@@ -554,17 +554,16 @@ def remap_tag_file(game_dir, rel_text, rel_tag, tag_blob, en_text, vn_text,
         if el.get("dynamics_"):
             colors = el.get("colors_") or []
             changed += remap_dynamics(vn_txt, colors, el["dynamics_"])
-        if el.get("times_"):
+        if el.get("times_") and en_el is not None:
             # voice/text sync markers: offsets index the EN string, so remap
             # them to the VN text using the EN tag as ground truth.
-            if en_el is not None:
-                en_times = en_el.get("times_")
-                if en_times:
-                    src_txt = en_text.get((rid, subid), "") if en_text else ""
-                    if src_txt:
-                        m0 = char_map(src_txt, vn_txt)
-                        changed += remap_times(vn_txt, el["times_"],
-                                               src_txt, m0)
+            en_times = en_el.get("times_")
+            if en_times:
+                src_txt = en_text.get((rid, subid), "") if en_text else ""
+                if src_txt:
+                    m0 = char_map(src_txt, vn_txt)
+                    changed += remap_times(vn_txt, el["times_"],
+                                           src_txt, m0)
         if en_el is None:
             # no EN ground truth -> span ranges left untouched
             skipped += 1
@@ -613,17 +612,21 @@ def remap_tag_file(game_dir, rel_text, rel_tag, tag_blob, en_text, vn_text,
                         if verbose:
                             print(f"  UNFOUND {rid} {key} [{start}:{end}] {sub_en!r}")
                         if report is not None:
-                            report.append(dict(file=rel_tag.split("/")[-1], id=rid,
-                                               key=key, item=n, en_start=start, en_end=end,
-                                               en_text=sub_en, vn_text=vn_txt, en_full=en_txt,
-                                               method="unresolved"))
+                            report.append({
+                                "file": rel_tag.split("/")[-1], "id": rid,
+                                "key": key, "item": n, "en_start": start, "en_end": end,
+                                "en_text": sub_en, "vn_text": vn_txt, "en_full": en_txt,
+                                "method": "unresolved",
+                            })
                         continue
                     ns, ne, method = new
                     if report is not None and method not in ("exact", "found", "marker", "match"):
-                        report.append(dict(file=rel_tag.split("/")[-1], id=rid,
-                                           key=key, item=n, en_start=start, en_end=end,
-                                           en_text=sub_en, vn_text=vn_txt, en_full=en_txt,
-                                           vn_start=ns, vn_end=ne, method=method))
+                        report.append({
+                            "file": rel_tag.split("/")[-1], "id": rid,
+                            "key": key, "item": n, "en_start": start, "en_end": end,
+                            "en_text": sub_en, "vn_text": vn_txt, "en_full": en_txt,
+                            "vn_start": ns, "vn_end": ne, "method": method,
+                        })
                 if method == "manual":
                     manual += 1
                 if ns != start or ne != end:
@@ -704,7 +707,8 @@ def main():
         vn_path = os.path.join(game, dir_rel, base + ".msg")
         if not os.path.exists(vn_path):
             continue
-        vn_text = msgpack.unpackb(open(vn_path, "rb").read(), raw=False)
+        with open(vn_path, "rb") as fh:
+            vn_text = msgpack.unpackb(fh.read(), raw=False)
 
         changed, rows, unfound, skipped, manual = remap_tag_file(
             game, dir_rel, ko_tag_path, tag_blob, en_text, vn_text,

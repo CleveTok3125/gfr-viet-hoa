@@ -19,12 +19,14 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
 
 from common import bootstrap
+
 bootstrap()
-from common import load_translations, table_rel, find_game_dir
+import msgpack
+
+import datai
+from common import find_game_dir, load_translations, table_rel
 from extract import extract
 from patch_engine import read_msg, write_msg
-import datai
-import msgpack
 
 
 def en_path(file):
@@ -140,7 +142,7 @@ def main():
                 pass
             else:
                 corrupt += 1
-        except Exception:
+        except Exception:  # noqa: BLE001
             corrupt += 1
     print(f"Verify: 0 corrupt, {corrupt} corrupt tables")
 

@@ -17,16 +17,15 @@ import hashlib
 import json
 import os
 import sys
-import tempfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
 from common import bootstrap
 
 bootstrap()
 from common import repo_file
+from extract import extract
 from game_version import game_version
 from patch_engine import read_msg
-from extract import extract
 
 EN_PREFIX = "system/table/text/en"
 VN_TEXT_DIR = "data/system/table/text/ko"
@@ -37,10 +36,7 @@ VN_SCENARIO_DIR = "data/system/table/scenario/ko"
 FINGERPRINT_FILES = ["text_ui.msg", "text.msg"]
 
 TEXT_FILES = sorted(
-    "text.msg text_badge.msg text_chainburst.msg text_communication.msg "
-    "text_dialog.msg text_fate_episode.msg text_limit_bonus.msg text_note.msg "
-    "text_skillboard.msg text_stage.msg text_status.msg text_story.msg "
-    "text_tutorial.msg text_ui.msg text_uskill.msg".split()
+    ["text.msg", "text_badge.msg", "text_chainburst.msg", "text_communication.msg", "text_dialog.msg", "text_fate_episode.msg", "text_limit_bonus.msg", "text_note.msg", "text_skillboard.msg", "text_stage.msg", "text_status.msg", "text_story.msg", "text_tutorial.msg", "text_ui.msg", "text_uskill.msg"]
 )
 
 
@@ -82,7 +78,8 @@ def main():
               for f in scenario_files(game)])
     for fname, en_prefix, vn_dir in files:
         if args.en_ref:
-            raw = open(os.path.join(args.en_ref, fname), "rb").read()
+            with open(os.path.join(args.en_ref, fname), "rb") as fh:
+                raw = fh.read()
         else:
             raw = extract(game, f"{en_prefix}/{fname}")
             if raw is None:

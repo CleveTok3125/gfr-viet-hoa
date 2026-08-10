@@ -29,11 +29,18 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 sys.path.insert(0, os.path.join(_HERE, ".."))
 
-from common import bootstrap  # noqa: E402
+from common import bootstrap
+
 bootstrap()
 
-from remap_tags import (  # noqa: E402
-    build_id_text, char_map, find_in_vn, remap_range, TEXT_KO, SCENARIO_KO)
+from remap_tags import (
+    SCENARIO_KO,
+    TEXT_KO,
+    build_id_text,
+    char_map,
+    find_in_vn,
+    remap_range,
+)
 
 
 def show_vn(vn_text, s, e, width=60):
@@ -73,9 +80,11 @@ def main():
     only = set(args.only.split(",")) if args.only else None
 
     import glob
-    from remap_tags import load_tag, save_tag
-    from extract import extract
+
     import msgpack
+
+    from extract import extract
+    from remap_tags import load_tag
 
     overrides = {}
     if os.path.exists(args.overrides):
@@ -116,7 +125,8 @@ def main():
         vn_path = os.path.join(game, dir_rel, base + ".msg")
         if not os.path.exists(vn_path):
             continue
-        vn_text = msgpack.unpackb(open(vn_path, "rb").read(), raw=False)
+        with open(vn_path, "rb") as fh:
+            vn_text = msgpack.unpackb(fh.read(), raw=False)
         vn_by_id = build_id_text(vn_text)
 
         # Build the same EN tag index used by remap_tags for ground truth.

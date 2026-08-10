@@ -39,22 +39,40 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 sys.path.insert(0, os.path.join(_HERE, ".."))
 
-from textual.app import App, ComposeResult  # noqa: E402
-from textual.binding import Binding  # noqa: E402
-from textual.containers import (  # noqa: E402
-    Horizontal, ScrollableContainer, Vertical)
-from textual.widgets import (  # noqa: E402
-    Button, Checkbox, DataTable, Footer, Header, Input, Label, RadioButton,
-    RadioSet, Static, TextArea)
-from textual.suggester import Suggester  # noqa: E402
-from textual import on  # noqa: E402
+from textual import on
+from textual.app import App, ComposeResult
+from textual.binding import Binding
+from textual.containers import Horizontal, ScrollableContainer, Vertical
+from textual.suggester import Suggester
+from textual.widgets import (
+    Button,
+    Checkbox,
+    DataTable,
+    Footer,
+    Header,
+    Input,
+    Label,
+    RadioButton,
+    RadioSet,
+    Static,
+    TextArea,
+)
 
-from common import bootstrap  # noqa: E402
+from common import bootstrap
+
 bootstrap()
 
-from tr_edit_core import (  # noqa: E402
-    Store, ScanItem, iter_scan, matches, build_compound, parse_compound,
-    apply_edit)
+from typing import ClassVar
+
+from tr_edit_core import (
+    ScanItem,
+    Store,
+    apply_edit,
+    build_compound,
+    iter_scan,
+    matches,
+    parse_compound,
+)
 
 MAX_ROWS = 3000
 CONTEXT_MARGIN = 15
@@ -637,7 +655,7 @@ class TrEditApp(App):
     }
     """
 
-    BINDINGS = [
+    BINDINGS: ClassVar[list[Binding]] = [
         Binding("ctrl+s", "save_edit", "Save", show=True),
         Binding("ctrl+r", "reset_edit", "Reset", show=True),
         Binding("ctrl+e", "focus_editor", "Edit", show=True),
@@ -668,8 +686,7 @@ class TrEditApp(App):
         super().__init__()
         self.store = Store(game_dir=game_dir)
         if default_file:
-            if default_file.endswith(".msg"):
-                default_file = default_file[:-len(".msg")]
+            default_file = default_file.removesuffix(".msg")
             self.base = default_file
         else:
             self.base = ""   # empty = browse all tables
@@ -812,7 +829,7 @@ class TrEditApp(App):
             if target_idx is None:
                 try:
                     target_idx = table.get_row_index(sel_key)
-                except Exception:
+                except Exception:  # noqa: BLE001 - row may have been filtered out
                     target_idx = None
             if target_idx is not None:
                 table.move_cursor(row=target_idx)
@@ -868,7 +885,7 @@ class TrEditApp(App):
             try:
                 table.move_cursor(row=table.get_row_index(
                     (self.current_key[0], self.current_key[1])))
-            except Exception:
+            except Exception:  # noqa: BLE001, S110 - cursor already outside table
                 pass
             return
         # A RowHighlighted can re-fire for the already-loaded row (e.g. after
@@ -906,7 +923,7 @@ class TrEditApp(App):
 
     def _render_preview(self, item) -> None:
         ids = ", ".join(item.ids) or "(no id)"
-        from tr_edit_core import tuned_times, en_compound
+        from tr_edit_core import en_compound, tuned_times
         base = item.file[:-len(".msg")]
         sync_offs = []
         for rid in item.ids:
@@ -952,7 +969,7 @@ class TrEditApp(App):
                 parts.append(f"[b]{label}[/b] {time:.2f}s"
                              + (" wait" if wait else ""))
             if parts:
-                prev += f"\n[b]Sync:[/b]  " + "   ".join(parts)
+                prev += "\n[b]Sync:[/b]  " + "   ".join(parts)
             break
         return prev
 
@@ -966,7 +983,7 @@ class TrEditApp(App):
             if isinstance(child, ReplacePanel):
                 try:
                     child.count()
-                except Exception:
+                except Exception:  # noqa: BLE001, S110 - keep the UI alive
                     pass
 
     def _rich_esc(self, s: str) -> str:
@@ -1009,7 +1026,7 @@ class TrEditApp(App):
         character so a translator can see the pause point at a glance.
         """
         q = self.query_one("#search", Input).value.strip()
-        from tr_edit_core import _WILDCARD_RE, _wildcard_regex, _norm_key
+        from tr_edit_core import _WILDCARD_RE, _norm_key, _wildcard_regex
         norm = _norm_key(vn)
         if q:
             if _WILDCARD_RE.search(q):
@@ -1067,7 +1084,7 @@ class TrEditApp(App):
         then mapped through ``en_index_at`` to the compound position and given
         the same blue tint as the VN line.
         """
-        from tr_edit_core import en_compound, en_index_at
+        from tr_edit_core import en_index_at
         offs = self.store.en_times_offsets(file, ids)
         if not offs:
             return en_view
@@ -1343,7 +1360,7 @@ class TrEditApp(App):
         idx = (table.cursor_row + delta) % table.row_count
         try:
             table.move_cursor(row=idx)
-        except Exception:
+        except Exception:  # noqa: BLE001 - table row vanished mid-scroll
             return
         key = table.get_row_at(idx)
         item = self.rows_by_key.get(key[0] + "\u0000" + key[1])
@@ -1416,14 +1433,11 @@ class TrEditApp(App):
         MAX_ROWS scanning is impractical for a huge file header check.
         """
         base = key[0]
-        if base.endswith(".msg"):
-            base = base[:-len(".msg")]
+        base = base.removesuffix(".msg")
         bases = {base} if base else None
-        idx = 0
-        for it in iter_scan(self.store, bases=bases):
+        for idx, it in enumerate(iter_scan(self.store, bases=bases)):
             if it.file == key[0] and it.en == key[1]:
                 return idx
-            idx += 1
         return -1
 
     # -- inline slot (replaces the legend panel, bottom-left) --------------

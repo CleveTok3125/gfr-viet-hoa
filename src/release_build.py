@@ -20,7 +20,7 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 def vh_stamp(now=None):
     """Current build timestamp, e.g. ``VH v2026.08.09.1015``."""
-    return "VH v" + (now or datetime.now()).strftime("%Y.%m.%d.%H%M")
+    return "VH v" + (now or datetime.now().astimezone()).strftime("%Y.%m.%d.%H%M")
 
 
 def stamp_release(func):

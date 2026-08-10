@@ -35,7 +35,8 @@ def _vec_data(buf, root, field_vt):
 
 
 def load_root(path):
-    buf = bytearray(open(path, "rb").read())
+    with open(path, "rb") as fh:
+        buf = bytearray(fh.read())
     root = IndexFile.IndexFile.GetRootAs(bytes(buf), 0)
     return buf, root
 
@@ -76,7 +77,8 @@ def fix_sizes(game_dir, index_path, paths_to_fix):
             struct.pack_into("<Q", buf, vsize + lo * 8, actual)
             fixes.append((rel, declared, actual))
     if fixes:
-        open(index_path, "wb").write(bytes(buf))
+        with open(index_path, "wb") as fh:
+            fh.write(bytes(buf))
     return fixes
 
 
@@ -108,6 +110,7 @@ def rebuild_index(index_path, extra_external=None):
     required because FlatBuffers vectors cannot be resized in place.
     """
     import flatbuffers
+
     from gbfr_schema import IndexFile as IF
 
     buf, root = load_root(index_path)
@@ -131,8 +134,8 @@ def rebuild_index(index_path, extra_external=None):
     archive, _ = rb(10, 8)
     f2c, nf2c = rb(12, 12)
     chunks, nch = rb(14, 24)
-    exthash, _ = rb(16, 8)
-    extsize, _ = rb(18, 8)
+    _exthash, _ = rb(16, 8)
+    _extsize, _ = rb(18, 8)
     cached, _ = rb(20, 4)
 
     # resolve existing parallel external vectors
@@ -193,7 +196,8 @@ def materialize_loose(game_dir, index_path, rel_paths):
     if not rel_paths:
         return 0, 0
     from extract import extract
-    index_bytes = open(index_path, "rb").read()
+    with open(index_path, "rb") as fh:
+        index_bytes = fh.read()
     created = 0
     extra = []
     for rel in rel_paths:
@@ -207,7 +211,8 @@ def materialize_loose(game_dir, index_path, rel_paths):
                 f.write(raw)
             created += 1
         else:
-            raw = open(disk, "rb").read()
+            with open(disk, "rb") as fh:
+                raw = fh.read()
         extra.append((hash_path(rel), os.path.getsize(disk) if os.path.isfile(disk) else len(raw)))
     registered = 0
     if extra:
@@ -249,5 +254,6 @@ def patch_ui_lang(index_path, filelist):
             buf[ks:ks + 12] = buf[es:es + 12]
             changed += 1
     if changed:
-        open(index_path, "wb").write(bytes(buf))
+        with open(index_path, "wb") as fh:
+            fh.write(bytes(buf))
     return changed, missing

@@ -2,10 +2,9 @@
 import os
 import struct
 
-from lz4_block_pure import decompress as _lz4_decompress
-
-from xxh64_pure import xxh64
 from gbfr_schema import IndexFile
+from lz4_block_pure import decompress as _lz4_decompress
+from xxh64_pure import xxh64
 
 
 def vec_data(buf, root, field_vt):
@@ -38,7 +37,8 @@ def extract(game_dir, path, index_bytes=None):
     """
     if index_bytes is None:
         index_path = os.path.join(game_dir, "data.i")
-        buf = open(index_path, "rb").read()
+        with open(index_path, "rb") as fh:
+            buf = fh.read()
     else:
         buf = index_bytes
     root = IndexFile.IndexFile.GetRootAs(buf, 0)

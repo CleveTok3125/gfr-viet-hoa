@@ -11,6 +11,7 @@ Usage:
 
 Exits 0 when everything matches, 1 otherwise.
 """
+
 import argparse
 import hashlib
 import json
@@ -21,22 +22,27 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
 
 from common import bootstrap
+
 bootstrap()
+
 from common import load_translations, table_rel
 from release_build import stamp_release
 
-MANIFEST = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                        "data", "release_manifest.json")
+MANIFEST = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "data", "release_manifest.json"
+)
 
 
 def patched_files():
     files = ["data.i"]
     for f in load_translations()["translations"]:
         files.append(os.path.join(table_rel(f), f))
-        files.append(os.path.join(table_rel(f), f[:-len(".msg")] + "_tag.msg"))
+        files.append(os.path.join(table_rel(f), f[: -len(".msg")] + "_tag.msg"))
     from patcher import FONTS_ZIP
+
     if os.path.isfile(FONTS_ZIP):
         import zipfile
+
         with zipfile.ZipFile(FONTS_ZIP) as zf:
             files.extend("data/" + name for name in zf.namelist())
     return files
@@ -50,7 +56,6 @@ def md5(path):
     return h.hexdigest()
 
 
-@stamp_release
 def gen_manifest(game_dir, out=MANIFEST):
     meta = load_translations()["meta"]
     manifest = {"build": meta.get("build", "?"), "files": {}}
@@ -90,8 +95,11 @@ def verify(game_dir, manifest_path=MANIFEST):
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--game", help="path to the GBF Relink install")
-    ap.add_argument("--gen", action="store_true",
-                    help="write a fresh manifest from this install instead of checking")
+    ap.add_argument(
+        "--gen",
+        action="store_true",
+        help="write a fresh manifest from this install instead of checking",
+    )
     args = ap.parse_args()
 
     game = args.game
@@ -100,13 +108,15 @@ def main():
         sys.exit(1)
 
     if args.gen:
-        gen_manifest(game)
+        stamp_release(gen_manifest)(game)
         sys.exit(0)
 
     mismatches = verify(game)
     if mismatches is None:
-        print("No manifest found. Run with --gen first, or rebuild via "
-              "build_patch.py (which writes one).")
+        print(
+            "No manifest found. Run with --gen first, or rebuild via "
+            "build_patch.py (which writes one)."
+        )
         sys.exit(1)
     if mismatches:
         print(f"VERIFY FAILED: {len(mismatches)} file(s) differ from the reference:")

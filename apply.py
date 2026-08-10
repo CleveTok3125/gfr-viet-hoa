@@ -30,8 +30,15 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
 
 from common import bootstrap
+
 bootstrap()
-from common import load_translations, load_rules, load_filelist, find_game_dir, check_version
+from common import (
+    check_version,
+    find_game_dir,
+    load_filelist,
+    load_rules,
+    load_translations,
+)
 from game_version import game_version
 from patch_engine import PatchEngine
 from patcher import patch_install, report

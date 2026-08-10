@@ -112,10 +112,6 @@ def find_game_dir():
     hint = os.environ.get("GBFR_GAME")
     if hint and os.path.isfile(os.path.join(hint, "data.i")):
         return hint
-    markers = (
-        "data.i",
-        os.path.join("data", "system", "table", "text", "ko", "text_ui.msg"),
-    )
     skip = {".", "..", "Windows", "Program Files", "Program Files (x86)",
             "Users", "$Recycle.Bin", "System Volume Information", "Recovery",
             "AppData", ".cache", "__pycache__"}
