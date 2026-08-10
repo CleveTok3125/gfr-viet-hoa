@@ -15,13 +15,21 @@ for p in (REPO, os.path.join(REPO, "src"), os.path.join(REPO, "vendor")):
         sys.path.insert(0, p)
 
 from common import bootstrap
+
 bootstrap()
-from common import load_translations, load_rules, load_filelist, find_game_dir, check_version
+from apply import md5_file, restore
+from common import (
+    check_version,
+    find_game_dir,
+    load_filelist,
+    load_rules,
+    load_translations,
+)
 from game_version import game_version
 from patch_engine import PatchEngine
 from patcher import patch_install, report
+from release_build import stamp_release
 from verify import verify
-from apply import md5_file, restore
 
 
 def pick_game_dir(explicit):
@@ -110,7 +118,11 @@ def main():
             sys.exit(2)
         restore(game, index, backup_dir)
         args.skip_backup = True
-        print("Rebuild: restored to pristine state.")
+        # Stamp the new build-VH before any load_translations() below runs, so
+        # patch_install writes the fresh version row into the game tables
+        # (gen_manifest alone would only record the old stamp afterwards).
+        stamp = stamp_release(lambda: None)()
+        print(f"Rebuild: restored to pristine state (stamp {stamp}).")
 
     if not args.skip_backup and os.path.isfile(backup_index):
         cur_md5 = md5_file(index)

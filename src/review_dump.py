@@ -1,12 +1,17 @@
 #!/usr/bin/env python3
 """Print interp entries of one tag file with full context for manual review."""
-import sys, os, re, glob
+import os
+import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-from common import bootstrap; bootstrap()
+
 import msgpack
-from remap_tags import load_tag, build_id_text, char_map, remap_range
+
+from common import SCENARIO_KO, TEXT_KO, bootstrap
+
+bootstrap()
 from extract import extract
-from common import TEXT_KO, SCENARIO_KO
+from remap_tags import build_id_text, char_map, load_tag, remap_range
 
 game = sys.argv[1]
 base = sys.argv[2]
@@ -18,7 +23,8 @@ TAG_KEYS = ("bolds_", "colors_", "words_", "names_")
 
 tag = load_tag(os.path.join(game, dir_rel, base + "_tag.msg"))
 en_text = build_id_text(msgpack.unpackb(extract(game, os.path.join(en_dir, base + ".msg")), raw=False))
-vn = msgpack.unpackb(open(os.path.join(game, dir_rel, base + ".msg"), "rb").read(), raw=False)
+with open(os.path.join(game, dir_rel, base + ".msg"), "rb") as fh:
+    vn = msgpack.unpackb(fh.read(), raw=False)
 vn_by_id = build_id_text(vn)
 en_tag = msgpack.unpackb(extract(game, os.path.join(en_dir, base + "_tag.msg")), raw=False)
 en_by_id = {}
@@ -39,7 +45,7 @@ for e in tag["Tag"]["tags_"]:
             if n >= len(src): continue
             try:
                 s = int(src[n]["Element"]["start_"]); e2 = int(src[n]["Element"]["end_"])
-            except Exception:
+            except (TypeError, ValueError, KeyError):
                 continue
             res = remap_range(en_t, vn_t, m, s, e2)
             meth = res[2] if res and res[0] is not None else "unresolved"

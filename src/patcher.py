@@ -14,7 +14,7 @@ import msgpack
 import datai
 from common import table_rel
 from extract import extract
-from patch_engine import PatchEngine, read_msg
+from patch_engine import read_msg
 
 
 def loose_ko_paths(game, index_bytes):
@@ -31,8 +31,7 @@ def loose_ko_paths(game, index_bytes):
     for p in load_filelist():
         if not p.endswith(".msg"):
             continue
-        if not (p.startswith("system/table/text/ko/") or
-                p.startswith("system/table/scenario/ko/")):
+        if not (p.startswith(("system/table/text/ko/", "system/table/scenario/ko/"))):
             continue
         if extract(game, p, index_bytes) is not None:
             rels.append(p)
@@ -219,7 +218,6 @@ def patch_install(game, index, engine, filelist,
     # Recreate the tuned *_tag.msg tables from tag_tuning.json (single source
     # of truth) so an install never depends on leftover on-disk tag state.
     import tag_tuning
-    import common
     tag_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                             "tag_tuning.json")
     if os.path.isfile(tag_path):
@@ -231,7 +229,7 @@ def patch_install(game, index, engine, filelist,
                 log(f"  tags: wrote {len(tag_changed)} tuned tag table(s)")
             if tag_stamped:
                 log(f"  tags: applied {tag_stamped} manual override range(s)")
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - tag tuning is best-effort
             log(f"  tags: tag_tuning.json skipped ({e})")
     else:
         log("  tags: tag_tuning.json missing - tag tables left as-is")
@@ -254,7 +252,7 @@ def patch_install(game, index, engine, filelist,
                 results["ok_tables"] += 1
             else:
                 results["corrupt_tables"] += 1
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - one corrupt table must not abort the patch
             results["corrupt_tables"] += 1
             log(f"  CORRUPT {file}: {e}")
 

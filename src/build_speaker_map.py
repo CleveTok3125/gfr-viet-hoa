@@ -20,11 +20,13 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 
-import msgpack  # noqa: E402
-from common import bootstrap  # noqa: E402
+import msgpack
+
+from common import bootstrap
+
 bootstrap()
-from common import find_game_dir  # noqa: E402
-from extract import extract  # noqa: E402
+from common import find_game_dir
+from extract import extract
 
 
 def scenario_nums(game, index_bytes):
@@ -84,7 +86,8 @@ def main():
     index_path = os.path.join(game, "data.i")
     if not os.path.isfile(index_path):
         sys.exit(f"data.i not found at {index_path}")
-    index_bytes = open(index_path, "rb").read()
+    with open(index_path, "rb") as fh:
+        index_bytes = fh.read()
 
     cnames = chara_names(game, index_bytes)
     nums = scenario_nums(game, index_bytes)

@@ -20,24 +20,24 @@ Literals ``{`` ``}`` ``[`` are escaped as ``\\{`` ``\\}`` ``\\[``.
 """
 from __future__ import annotations
 
+import copy
+import functools
 import json
 import os
 import re
 import sys
-import copy
-import functools
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 sys.path.insert(0, os.path.join(_HERE, ".."))
 
-import msgpack  # noqa: E402
+import msgpack
 
-from common import bootstrap  # noqa: E402
+from common import bootstrap
+
 bootstrap()
 
-from common import (  # noqa: E402
-    repo_file, load_translations, SCENARIO_KO, TEXT_KO)
+from common import load_translations, repo_file
 
 HIGHLIGHT_KEYS = ("colors_", "words_", "bolds_")
 HIGHLIGHT_RE = re.compile(r"\{([cbw]{1,3}):((?:[^{}]|\\.)*)\}")
@@ -100,7 +100,7 @@ class Store:
         if raw:
             try:
                 rows = msgpack.unpackb(raw, raw=False)["rows_"]
-            except Exception:
+            except Exception:  # noqa: BLE001 - decode failures fall back to no rows
                 rows = []
             for r in rows:
                 c = r.get("column_", {})
@@ -139,7 +139,7 @@ class Store:
             if raw:
                 try:
                     rows = msgpack.unpackb(raw, raw=False)["rows_"]
-                except Exception:
+                except Exception:  # noqa: BLE001 - decode failures fall back to no rows
                     rows = []
                 for r in rows:
                     c = r.get("column_", {})
@@ -187,7 +187,7 @@ class Store:
         out = {}
         try:
             blob = msgpack.unpackb(raw, raw=False)
-        except Exception:
+        except Exception:  # noqa: BLE001 - corrupt tag table yields empty spans
             cache[file] = {}
             return {}
         for entry in blob.get("Tag", {}).get("tags_", []):
@@ -258,7 +258,7 @@ class Store:
 class Item:
     """One translatable entry with its resolved identity + markers."""
 
-    __slots__ = ("file", "en", "vn", "ids", "speaker", "markers", "player_pos")
+    __slots__ = ("en", "file", "ids", "markers", "player_pos", "speaker", "vn")
 
     def __init__(self, store, file, en, vn):
         self.file = file
@@ -301,7 +301,7 @@ class ScanItem:
     so a full-text table scan stays cheap.
     """
 
-    __slots__ = ("file", "en", "vn", "ids", "speaker")
+    __slots__ = ("en", "file", "ids", "speaker", "vn")
 
     def __init__(self, store, file, en, vn):
         self.file = file
@@ -380,10 +380,8 @@ def _wildcard_regex(q):
     for tok in _WILDCARD_RE.split(q):
         parts.append(re.escape(tok))
     out = ""
-    i = 0
-    for tok in _WILDCARD_RE.findall(q):
+    for i, tok in enumerate(_WILDCARD_RE.findall(q)):
         out += parts[i] + (".*" if tok == "*" else ".")
-        i += 1
     out += parts[-1]
     _last_re = re.compile(out, re.IGNORECASE | re.DOTALL)
     _last_query = q
@@ -431,10 +429,10 @@ def _tuned_spans(store, base, rid, key):
     """
     try:
         entries = (store.tuned or {}).get("files", {}).get(base, {})
-    except Exception:
+    except Exception:  # noqa: BLE001 - absent/unshaped tuning defaults to empty
         return []
     out = []
-    for _k, rec in entries.items():
+    for rec in entries.values():
         if rec.get("id_") != rid:
             continue
         for item in rec.get(key, []) or []:
@@ -463,17 +461,17 @@ def tuned_times(store, base, rid):
     """
     try:
         entries = (store.tuned or {}).get("files", {}).get(base, {})
-    except Exception:
+    except Exception:  # noqa: BLE001 - absent/unshaped tuning defaults to empty
         entries = {}
     out = []
-    for _k, rec in entries.items():
+    for rec in entries.values():
         if rec.get("id_") != rid:
             continue
         override = {}
         try:
             override = (store.overrides or {}).get(base, {}).get(rid, {}) \
                 .get("times_", {}) or {}
-        except Exception:
+        except Exception:  # noqa: BLE001 - unshaped override ignored
             override = {}
         for i, item in enumerate(rec.get("times_", []) or []):
             el = item.get("Element", item)
@@ -672,10 +670,10 @@ def en_compound(store, item):
         rec = spans.get((rid, subid))
         if not rec:
             continue
-        for key in TAG:
+        for key, tag in TAG.items():
             for s, e in rec.get(key, []):
                 if 0 <= s <= e <= len(en):
-                    groups.setdefault((s, e), set()).add(TAG[key])
+                    groups.setdefault((s, e), set()).add(tag)
         for s, e in rec.get("names_", []):
             if 0 <= s <= len(en):
                 player_pos = s
@@ -920,7 +918,7 @@ def apply_edit(store, item, compound):
     for rid in item.ids:
         ov = store.overrides.setdefault(base, {}).setdefault(rid, {})
         for k in HIGHLIGHT_KEYS:
-            if k in ren and ren[k]:
+            if ren.get(k):
                 kmap = ov.setdefault(k, {})
                 for idx, ph in ren[k].items():
                     s = vn.find(ph[0])
@@ -980,7 +978,7 @@ def replace_in_compound(compound, regex, repl):
         else None
 
     class _Tmp:
-        __slots__ = ("vn", "markers", "player_pos", "speaker")
+        __slots__ = ("markers", "player_pos", "speaker", "vn")
     tmp = _Tmp()
     tmp.vn = new_vn
     tmp.markers = kept
@@ -1032,7 +1030,7 @@ def self_test(store, file, en):
     before_ov = {r: copy.deepcopy(d)
                  for r, d in store.overrides.get(base, {}).items()}
     compound = build_compound(item)
-    speaker, vn2, hi2, pos2 = parse_compound(compound)
+    _speaker, vn2, _, _ = parse_compound(compound)
     warnings = apply_edit(store, item, compound)
     ok = table[en] == before_vn and not warnings
     ok = ok and all(item.vn == vn2 for _ in [0])

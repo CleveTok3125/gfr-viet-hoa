@@ -35,5 +35,5 @@ def game_version(exe_path):
         with open(exe_path, "rb") as f:
             data = f.read()
         return _heuristic_version(data)
-    except Exception:
+    except Exception:  # noqa: BLE001 - return None whenever the exe cannot be parsed
         return None

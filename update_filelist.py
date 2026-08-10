@@ -11,7 +11,6 @@ Usage:
 import argparse
 import gzip
 import os
-import sys
 import urllib.request
 
 DEFAULT_URL = ("https://raw.githubusercontent.com/Nenkai/GBFRDataTools/"

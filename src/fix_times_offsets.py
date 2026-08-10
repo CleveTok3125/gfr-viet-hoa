@@ -23,13 +23,14 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from common import bootstrap  # noqa: E402
+from common import bootstrap
+
 bootstrap()
 
-import msgpack  # noqa: E402
+import msgpack
 
-from extract import extract  # noqa: E402
-from remap_tags import char_map, remap_times  # noqa: E402
+from extract import extract
+from remap_tags import char_map, remap_times
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TUNING = os.path.join(HERE, "tag_tuning.json")
@@ -68,7 +69,7 @@ def main():
         en_text = load_text_table(args.game, rel)
         vn_table = tr.get(base + ".msg", {})
         changed = 0
-        for key, rec in entries.items():
+        for rec in entries.values():
             if "times_" not in rec or not rec["times_"]:
                 continue
             rid = rec.get("id_", "")

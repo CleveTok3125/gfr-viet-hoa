@@ -27,10 +27,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
 
 from common import bootstrap
+
 bootstrap()
 from common import load_translations, repo_file, table_rel
-from game_version import game_version
 from extract import extract
+from game_version import game_version
 
 FUZZY_ACCEPT = 0.95
 FUZZY_REVIEW = 0.90

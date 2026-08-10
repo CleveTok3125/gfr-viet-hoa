@@ -7,13 +7,19 @@ decisions.json format:
 occurrence is optional (default 0 = first match). If the phrase is not found
 in the VN text, the entry is skipped and reported.
 """
-import sys, os, re, json, glob
+import json
+import os
+import re
+import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-from common import bootstrap; bootstrap()
+
 import msgpack
-from remap_tags import load_tag, build_id_text
-from extract import extract
-from common import TEXT_KO, SCENARIO_KO
+
+from common import SCENARIO_KO, TEXT_KO, bootstrap
+
+bootstrap()
+from remap_tags import build_id_text, load_tag
 
 game = sys.argv[1]
 decisions_path = sys.argv[2]
@@ -32,7 +38,9 @@ def vn_by_id_for(base):
         dir_rel = SCENARIO_KO
     else:
         dir_rel = TEXT_KO
-    vn = msgpack.unpackb(open(os.path.join(game, dir_rel, base + ".msg"), "rb").read(), raw=False)
+    vn_path = os.path.join(game, dir_rel, base + ".msg")
+    with open(vn_path, "rb") as fh:
+        vn = msgpack.unpackb(fh.read(), raw=False)
     return build_id_text(vn), dir_rel
 
 def subids_for(base):

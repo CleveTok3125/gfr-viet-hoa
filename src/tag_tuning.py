@@ -36,16 +36,14 @@ so `write_to_game` reconstructs a byte-equivalent msgpack table. Keys are
 `id_`/`subid_`; within a file these are unique (verified), so the keyed map is
 lossless. Order of entries is not significant to the game (lookup by id).
 """
-import glob
 import json
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from remap_tags import load_tag, save_tag
 from common import load_filelist
-
+from remap_tags import load_tag, save_tag
 
 KEY_SEP = "::"
 
@@ -65,8 +63,7 @@ def tag_ko_paths(game_dir):
     for rel in load_filelist():
         if not rel.endswith("_tag.msg"):
             continue
-        if not (rel.startswith("system/table/text/ko/") or
-                rel.startswith("system/table/scenario/ko/")):
+        if not (rel.startswith(("system/table/text/ko/", "system/table/scenario/ko/"))):
             continue
         if os.path.isfile(os.path.join(game_dir, "data", rel)):
             out.append(rel)
@@ -87,7 +84,7 @@ def dump_from_game(game_dir):
             for k in ("bolds_", "colors_", "words_", "names_", "times_",
                       "bgms_", "vols_", "fades_", "icons_", "formats_",
                       "dynamics_", "alignments_", "copyrights_"):
-                if k in el and el[k]:
+                if el.get(k):
                     items[k] = _clean(el[k])
             rec = {"id_": el.get("id_", ""), "subid_": el.get("subid_", "")}
             rec.update(items)
@@ -160,7 +157,7 @@ def _apply_overrides(entries, overrides, base):
         return 0
     n_stamped = 0
     # entries keyed by "id::subid"; override rid keys on the entry id_ only.
-    for _, rec in entries.items():
+    for rec in entries.values():
         rid = rec.get("id_", "")
         id_over = file_over.get(rid)
         if not id_over:
