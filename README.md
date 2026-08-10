@@ -496,10 +496,23 @@ It diffs the English sources (extracted from `data.i`) against the installed
 ## Disclaimer
 
 Fan-made localization. All game assets and trademarks belong to Cygames, Inc.
-This is a personal-usage mod; distribute only within private circles.
+This is a personal-usage mod.
+
+**Redistribution (GPL v3).** This project is licensed under the **GNU GPL
+v3** (see `LICENSE`). Redistributing or publishing this product in binary /
+release / artifact form (e.g. re-uploading a pre-built release zip, patched
+`.msg` tables, `data.i`, fonts or any other build artifact) on other platforms
+or websites is **strictly prohibited unless the complete corresponding source
+code and the license text are distributed alongside it**, as required by the
+GPL v3. Prefer linking to this repository so everyone always gets the source.
+
+**Translation quality.** Only the strings reported as *hand-edited* (see
+`TRANSLATION_NOTES.md` and the per-table progress marks) have been reviewed
+and revised manually. Apart from the base-game content, everything else is
+machine/AI-translated; we make **no quality guarantee** for it — it may
+contain errors, awkward wording or mistranslations. We do not take
+responsibility for the quality, accuracy or completeness of the
+machine-translated sections, nor for maintaining this project going forward.
 
 The scenario dialogue is based on the base-game translation by **TheRedTeam**
-(before the **Endless Ragnarok** DLC); any additional or revised translations
-beyond that base are machine/AI-generated. We take no responsibility for the
-quality, accuracy or completeness of the AI-generated translations, and no
-responsibility for maintaining this project going forward.
+(before the **Endless Ragnarok** DLC).
