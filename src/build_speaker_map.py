@@ -56,9 +56,10 @@ def load(game, index_bytes, internal):
 
 
 def chara_names(game, index_bytes):
-    """charaID -> (name_ko, name_en) from text_chara tables."""
+    """charaID -> (name_ja, name_en) from text_chara tables."""
     names = {}
-    for lang in ("ko", "en"):
+    field = {"jp": "ja", "en": "en"}
+    for lang in ("jp", "en"):
         rows = load(game, index_bytes, f"system/table/text/{lang}/text_chara.msg")
         if not rows:
             continue
@@ -69,7 +70,7 @@ def chara_names(game, index_bytes):
                 continue
             cid = hid[4:]
             entry = names.setdefault(cid, {})
-            entry["name_" + lang] = c.get("text_", "")
+            entry["name_" + field[lang]] = c.get("text_", "")
     return names
 
 
@@ -110,7 +111,7 @@ def main():
                 "voice": c.get("voiceID_", ""),
                 "listener": c.get("listener_", ""),
                 "emotion": c.get("emotion_", ""),
-                "name_ko": (cnames.get(chara, {}) or {}).get("name_ko", ""),
+                "name_ja": (cnames.get(chara, {}) or {}).get("name_ja", ""),
                 "name_en": (cnames.get(chara, {}) or {}).get("name_en", ""),
             }
             speakers[sid] = entry

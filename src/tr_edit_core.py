@@ -157,7 +157,7 @@ class Store:
         """Best display name for the first non-empty speaker among ids."""
         for rid in ids:
             sp = self.speakers.get(rid, {})
-            for k in ("name_en", "name_ko", "chara"):
+            for k in ("name_en", "name_ja", "chara"):
                 v = sp.get(k)
                 if v:
                     return v
