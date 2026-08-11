@@ -1573,7 +1573,7 @@ class TrEditApp(App):
         """Sorted speaker display names for the Speaker filter suggestion."""
         names = set()
         for rec in (self.store.speakers or {}).values():
-            for k in ("name_en", "name_ko", "chara"):
+            for k in ("name_en", "name_ja", "chara"):
                 if rec.get(k):
                     names.add(rec[k])
         return sorted(names)

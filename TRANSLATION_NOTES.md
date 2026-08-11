@@ -82,16 +82,16 @@ Cách xưng hô trong tiếng Việt cần trung tính về giới, theo quy t�
 Bảng theo dõi trạng thái hoàn thành từng chương. Đánh dấu `x` vào ô đã hoàn
 thành, để `-` cho mục chưa làm.
 
-| Chapter (EN)                     | Chương (VI)                      | Hội thoại  | Highlight  | Voice-sync (times_)  | Glossary (gần nhất)  | Đảm bảo chất lượng  |
-|--------------------------------- |--------------------------------- |:---------: |:---------: |:-------------------: |:-------------------: |:------------------: |
-| `Into the Conflux`               | Vào Conflux                      |     x      |     x      |          x           |          x           |          x          |
-| `Echoes of Scorn`                | Những Tiếng Vọng Khinh Miệt      |     x      |     x      |          x           |          x           |          x          |
-| `A Trial of Two Eternities`      | Thử Thách Của Hai Cõi Vĩnh Hằng  |     x      |     x      |          x           |          x           |          x          |
-| `Ragnalia, the Heralds of Doom`  | Ragnalia, Sứ Giả Của Diệt Vong   |     x      |     x      |          x           |          x           |          x          |
-| `Becoming Fatebreakers`          | Trở Thành Kẻ Phá Số Mệnh         |     x      |     x      |          x           |          x           |          x          |
-| `Every End Has a Beginning`      | Mọi Kết Thúc Đều Có Khởi Đầu     |     x      |     x      |          x           |          x           |          x          |
-| `My Power Is Yours`              | Sức Mạnh Của Ta Là Của Ngươi     |     x      |     x      |          -           |          -           |          -          |
-| `Bursting with Power`            | Tràn Đầy Sức Mạnh                |     x      |     x      |          -           |          -           |          -          |
+| Chapter (EN)                     | Chương (VI)                            | Hội thoại  | Highlight  | Voice-sync (times_)  | Glossary (gần nhất)  | Đảm bảo chất lượng  |
+|--------------------------------- |--------------------------------------- |:---------: |:---------: |:-------------------: |:-------------------: |:------------------: |
+| `Into the Conflux`               | Vào Conflux                            |     x      |     x      |          x           |          x           |          x          |
+| `Echoes of Scorn`                | Những Tiếng Vọng Khinh Miệt            |     x      |     x      |          x           |          x           |          x          |
+| `A Trial of Two Eternities`      | Thử Thách Của Hai Cõi Vĩnh Hằng        |     x      |     x      |          x           |          x           |          x          |
+| `Ragnalia, the Heralds of Doom`  | Ragnalia, Sứ Giả Của Diệt Vong         |     x      |     x      |          x           |          x           |          x          |
+| `Becoming Fatebreakers`          | Trở Thành Kẻ Phá Số Mệnh               |     x      |     x      |          x           |          x           |          x          |
+| `Every End Has a Beginning`      | Mọi Kết Thúc Đều Có Khởi Đầu           |     x      |     x      |          x           |          x           |          x          |
+| `My Power Is Yours`              | Sức Mạnh Của Em Là Dành Cho Mọi Người  |     x      |     x      |          -           |          -           |          -          |
+| `Bursting with Power`            | Tràn Đầy Sức Mạnh                      |     x      |     x      |          -           |          -           |          -          |
 
 - **Hội thoại:** toàn bộ dialogue của chương đã dịch.
 - **Highlight:** mục `decisions.json` / `tag_overrides.json` cho các dòng trong
@@ -104,3 +104,20 @@ thành, để `-` cho mục chưa làm.
   dài khớp bản EN để đồng bộ highlight và hội thoại.
 
 ## TODO
+
+### Tiếp tục
+
+```text
+FILE      : text_scenario_730.msg
+  BASE      : text_scenario_730
+  IDS       : SNT_VT731150_001000
+  SPEAKER   : Lyria
+  SPEAKERS  : {"SNT_VT731150_001000": {"chara": "NP0000", "voice": "VO_VT731150_NP0000_001000", "listener": 0, "emotion": 2, "name_ja": "ルリア", "name_en": "Lyria"}}
+  EN        : "I'll help with my summoning powers! \nI just need some time..."
+  VN (plain): "Tôi sẽ hỗ trợ bằng sức mạnh triệu hồi!\nChỉ cần cho tôi chút thời gian..."
+  COMPOUND  : "Tôi sẽ hỗ trợ bằng sức mạnh triệu hồi!\nChỉ cần cho tôi chút thời gian..."
+  HIGHLIGHTS: []
+  PLAYER_POS: null
+  DECISIONS : {}
+  OVERRIDES : {}
+```
