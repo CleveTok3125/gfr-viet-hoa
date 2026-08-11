@@ -1,4 +1,4 @@
-"""Core patch logic shared by apply.py (end-user) and build_patch.py (release).
+"""Core patch logic shared by apply.py and gfrpatch (end-user installs).
 
 Rows are matched to their English reference by row index / id_hash, not by
 the on-disk display string. This is the correct update path: after a

@@ -40,7 +40,6 @@ filelist.txt.gz        internal file paths (hash -> path), under data/
 fonts.zip              Vietnamese font overrides (data/font/*), under data/
 gfrpatch/              runnable module: python3 -m gfrpatch
 apply.py               one-command patch for end users
-build_patch.py         build a self-contained release zip
 updater.py             diff the table against a newer game build
 verify.py              hash-check patched files vs release manifest
 rebuild_translations.py  regenerate the table from a patched install
@@ -192,24 +191,13 @@ The plain `apply.py` script (with auto-detection) works identically.
 patches only the strings that match the table while leaving everything else
 intact. For best results, always update the game to the supported build.
 
-### No-Python users: pre-patched release zip
+### Note on pre-patched distributions
 
-`build_patch.py` produces a zip containing `data.i` + the translated `ko/`
-tables (text, scenario and their `*_tag.msg` files) with the game's exact
-relative layout:
-
-```bash
-python3 build_patch.py --game "/path/to/install" --out gbfr_vietnam.zip
-```
-
-Extract the zip over the game directory (overwriting `data.i` and the `ko/`
-tables). This is what gets published as a GitHub Release.
-
-**Important:** the zip is built from one specific game build and should only
-be applied to that exact build (check the `Build check` line when in doubt).
-Applying a newer zip over an older install may break the game because `data.i`
-indexes assets that the older build does not have. Prefer `apply.py` if you
-are not on the exact build the zip was made for.
+This project intentionally does **not** ship pre-patched game files (`data.i`,
+patched `.msg` tables, fonts or any other build artifact) and provides no tool
+to package one. Applying the translation always runs on your own install via
+`apply.py` / `gfrpatch` above. Please do not re-upload patched game files
+elsewhere — point people to this repository instead.
 
 ### Maintainer: refresh the translation when the game updates
 
@@ -220,8 +208,7 @@ python3 updater.py --game "/path/to/new/install"
 The English sources are re-extracted from the new `data.i`; strings that still
 match exactly keep their translation, strings within `difflib` ratio >= 0.95
 are carried over automatically, and everything else lands in `review.txt`
-for a human to confirm or translate. Review, merge, then rebuild the release
-zip.
+for a human to confirm or translate. Review, merge, then re-apply and verify.
 
 ## Adding translations
 
@@ -230,8 +217,7 @@ Edit `translations.json` directly, or use the interactive TUI editor
 Every key must be the exact English string as found in the game (extract it
 with `src/extract.py` if unsure), the value the Vietnamese text. Keep proper
 names, format placeholders (`{0}`, `<d>`), and credits/license text unchanged.
-Run `apply.py` on a fresh English install to verify, then `build_patch.py` to
-ship.
+Run `apply.py` on a fresh English install to verify, then ship.
 
 The table covers the 14 main text tables plus 53 battle-scenario dialogue
 tables (`data/system/table/scenario/ko/*`). Scenario dialogue is based on the
@@ -423,13 +409,7 @@ else is installed via pip.
    full remap pass is not needed: `apply.py` / `gfrpatch` already stamp every
    entry of `tag_overrides.json` onto the recreated tag tables during
    patching.
-8. Ship it: commit, then
-
-   ```bash
-   python3 build_patch.py --game "/path/to/new/install" --out gbfr_vietnam.zip
-   ```
-
-   and upload the zip as a release.
+8. Ship it: commit and push the source update.
 
 ### Rebuilding the table from scratch (not normally needed)
 

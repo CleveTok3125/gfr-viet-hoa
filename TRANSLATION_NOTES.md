@@ -8,7 +8,7 @@ nào cho đúng*.
 ## Translation rules (Quy tắc dịch)
 
 - **`translations.json` là nguồn duy nhất.** Không chỉnh sửa trực tiếp
-  file game; mọi thay đổi đi qua bảng dịch rồi `apply.py` / `build_patch.py`.
+  file game; mọi thay đổi đi qua bảng dịch rồi `apply.py`.
 - **Giữ nguyên tên riêng, placeholder và markup kỹ thuật.**
   - Tên riêng (nhân vật, địa danh, tên sự vật) thường giữ nguyên bản Latinh,
     trừ khi có cách phiên âm/tên thuần Việt đã phổ biến.
@@ -75,7 +75,7 @@ Cách xưng hô trong tiếng Việt cần trung tính về giới, theo quy t�
 - File README/CHANGELOG viết bằng tiếng Anh; tài liệu hướng dẫn dịch
   (file này) viết bằng tiếng Việt để người dịch tra cứu nhanh.
 - Mỗi thay đổi dịch lớn nên ghi vào CHANGELOG.md và cập nhật manifest nếu đụng
-  tới table (`build_patch.py` / `verify.py` sẽ nhắc).
+  tới table (`verify.py --gen` sẽ nhắc).
 
 ## Báo cáo tiến độ (Progress report)
 

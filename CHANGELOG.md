@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- **Pre-patched release zip removed.** `build_patch.py` (which packaged a
+  redistributable `data.i` + ko/ tables zip) has been removed from the
+  repository. The translation is applied on your own install via
+  `apply.py` / `gfrpatch` only; no pre-patched game files are shipped or
+  generated. Speaker names in the editor now use Japanese (`name_ja`) as the
+  fallback display below English (`name_en`), instead of Korean.
+
 ## Unreleased - voice/text-sync timing fix
 
 - **Voice sync / text-reveal timing fixed.** The dialogue `*_tag.msg` tables
