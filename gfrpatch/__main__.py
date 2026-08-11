@@ -178,8 +178,8 @@ def main():
         else:
             mism = verify(game)
             if mism is None:
-                print("Note: no release manifest - run build_patch.py once to generate "
-                      "data/release_manifest.json for hash verification.")
+                print("Note: no release manifest - run `verify.py --gen` once to "
+                      "generate data/release_manifest.json for hash verification.")
             elif mism:
                 print(f"HASH VERIFY FAILED: {len(mism)} file(s) differ from the "
                       "reference manifest; restore backups and re-apply.")

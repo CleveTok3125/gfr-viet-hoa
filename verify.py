@@ -114,8 +114,7 @@ def main():
     mismatches = verify(game)
     if mismatches is None:
         print(
-            "No manifest found. Run with --gen first, or rebuild via "
-            "build_patch.py (which writes one)."
+            "No manifest found. Run with --gen first to write one."
         )
         sys.exit(1)
     if mismatches:
