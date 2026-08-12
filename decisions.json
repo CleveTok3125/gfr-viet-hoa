@@ -6566,5 +6566,43 @@
  "text_scenario_330": {},
  "text_badge": {},
  "text_skillboard": {},
- "text_scenario_400": {}
+ "text_scenario_400": {},
+ "text_scenario_730": {
+  "SNT_WD730010_0010": {
+   "colors_": {
+    "0": [
+     "Zegagrande"
+    ]
+   },
+   "words_": {
+    "0": [
+     "Zegagrande"
+    ]
+   }
+  },
+  "SNT_WD730010_0030": {
+   "colors_": {
+    "0": [
+     "ragnalia"
+    ]
+   },
+   "words_": {
+    "0": [
+     "ragnalia"
+    ]
+   }
+  },
+  "SNT_WD730010_0090": {
+   "colors_": {
+    "0": [
+     "ragnalia"
+    ]
+   },
+   "words_": {
+    "0": [
+     "ragnalia"
+    ]
+   }
+  }
+ }
 }
