@@ -2,54 +2,22 @@
  "meta": {
   "game": "Granblue Fantasy: Relink",
   "format": 1,
-  "description": "EN->VI translation table keyed by exact string found in .msg rows",
-  "credits": {
-   "scenario": "Scenario dialogue translation by TheRedTeam (base game, before the Endless Ragnarok DLC)"
-  },
+  "description": "VI translation table keyed by stable row ids (id_hash_ or id_hash_::subid_hash_)",
   "build": "2.0.3",
   "build_vh": "VH v2026.08.12.1446",
   "build_fingerprint": {
    "system/table/text/en/text_ui.msg": "e43a7245ed8a5c522eae0229d416f5a8",
    "system/table/text/en/text.msg": "a1dd473218e0bcda003701b0e0038027"
   },
-  "disclaimer": "Additional translations beyond the TheRedTeam base are machine/AI-generated; no responsibility for their quality or for maintaining this project.",
-  "redteam_merge": {
-   "source": "TheRedTeam installer Data.zip (ko/ tables)",
-   "addition_only": true,
-   "files_processed": 88,
-   "entries_added": 1632,
-   "entries_skipped_existing": 48976,
-   "identity_entries_added": 7141,
-   "new_files": [
-    "text_battle.msg",
-    "text_chara.msg",
-    "text_chara_attack.msg",
-    "text_costume.msg",
-    "text_demo.msg",
-    "text_filter_sort.msg",
-    "text_matching.msg",
-    "text_ogi.msg",
-    "text_option.msg",
-    "text_phase.msg",
-    "text_pub.msg",
-    "text_save.msg",
-    "text_session.msg",
-    "text_staff.msg",
-    "text_steam.msg",
-    "text_sum.msg",
-    "text_system.msg",
-    "text_telop.msg",
-    "text_temp.msg",
-    "text_tips.msg"
-   ]
-  },
+  "disclaimer": "Translation built on TheRedTeam's base and may diverge over time. Legit-install-only patch; no DRM bypass; do not redistribute patched game files.",
   "schema": 2,
   "converted": {
    "old_entries": 57750,
    "new_entries": 43346,
    "identity_dropped": 14404,
    "stale_entries": 0
-  }
+  },
+  "date": "2026-08-13"
  },
  "translations": {
   "text.msg": {

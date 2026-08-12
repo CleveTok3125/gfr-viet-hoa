@@ -30,6 +30,7 @@ import argparse
 import math
 import os
 import struct
+import unicodedata
 
 import msgpack
 import numpy as np
@@ -271,12 +272,13 @@ def extract_kerning(font, scale, cpset):
     out = []
     for (a, b), amt in acc.items():
         v = round(amt)
-        # Clamp to the vanilla font's kern range: the source fonts ship
-        # strong negative kern (up to ~-28px at 38px) that the game engine
-        # applies verbatim, making glyphs overlap (e.g. "Tr", "Ty"). The stock
-        # tt_pfdintextpro font stays within [-2, 2]; wider negative clamps
-        # make medium/Bold text look too cramped.
-        v = max(-2, min(2, v))
+        # Clamp to a non-negative kern range: the source fonts ship strong
+        # negative kern (up to ~-28px at 38px) that the game engine applies
+        # verbatim, making glyphs overlap (e.g. "Tr", "Ty"). Even the stock
+        # font's [-2, 2] leaves some pairs looking cramped at this size, so
+        # the range is widened to [0, 2] to add ~2px of extra spacing while
+        # still keeping capitals/tracking from drifting too far apart.
+        v = max(0, min(2, v))
         if v:
             out.append({"first": a, "second": b, "amount": v})
     out.sort(key=lambda k: (k["first"], k["second"]))
@@ -397,6 +399,17 @@ def main():
         gm = glyph_metrics(sfont, name, sscale)
         glyph_bx, glyph_by = gm["lsb"], gm["y0"]
         glyph_adv = gm["adv"]
+        # Precomposed/latin letters with marks may carry an advance that
+        # differs from their base letter (e.g. "ỉ" is ~34/1000 narrower than
+        # "i" in Barlow). Flow text at the base letter's width instead, so
+        # Vietnamese words do not jitter wider/narrower than Latin ones.
+        dec = unicodedata.decomposition(chr(cp))
+        if dec and not dec.startswith("<"):
+            parts = [int(p, 16) for p in dec.split()]
+            if parts and parts[0] in scmap and parts[0] != cp:
+                bname = scmap[parts[0]]
+                if bname in sfont.getGlyphSet():
+                    glyph_adv = sfont["hmtx"][bname][0] * sscale
 
         # The game addresses glyphs by the UTF-8 bytes of the code point read
         # as a big-endian integer (e.g. U+1EA0 "ạ" -> id 0xE1BAA0), NOT by the

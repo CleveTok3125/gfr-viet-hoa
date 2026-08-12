@@ -1,7 +1,7 @@
 {
  "build": "2.0.3",
  "files": {
-  "data.i": "3158e76df9d0855dc444a860cd42f278",
+  "data.i": "584c41899803da2c73578a464fca5437",
   "data/system/table/text/ko/text.msg": "d707784a36b72b9f22165562949b8384",
   "data/system/table/text/ko/text_tag.msg": "a0221156e7415cd278fad3d093e0e55e",
   "data/system/table/text/ko/text_badge.msg": "2bb5d1f6723d4b13558b403c8b664370",
@@ -26,7 +26,7 @@
   "data/system/table/text/ko/text_story_tag.msg": "c106a2d88db4a3da338b7dca25800772",
   "data/system/table/text/ko/text_tutorial.msg": "52814aae49b774e50fe0757d2e8beb8a",
   "data/system/table/text/ko/text_tutorial_tag.msg": "947e77bae366b268cffd136d7b572679",
-  "data/system/table/text/ko/text_ui.msg": "61f831d10aa57334794422b10cbabc60",
+  "data/system/table/text/ko/text_ui.msg": "99e9cdaa1380c4cb24e83b52bed245f8",
   "data/system/table/text/ko/text_ui_tag.msg": "badfbc497b82a054333f71739c4b30fb",
   "data/system/table/text/ko/text_uskill.msg": "ab7ced1d0d19fca777dfd1fdd415a465",
   "data/system/table/text/ko/text_uskill_tag.msg": "e7e0f6eef56921009d0d2f3f91202743",
@@ -178,12 +178,12 @@
   "data/system/table/text/ko/text_temp_tag.msg": "d40fe5bb0d58d95ef58458be7ace4aa5",
   "data/system/table/text/ko/text_tips.msg": "eb10c40ed0bcac1ec764e4cab0906f27",
   "data/system/table/text/ko/text_tips_tag.msg": "729d20cc17a499102a0794d437e6c5a8",
-  "data/font/tt_pfdintextpro-regular.msg": "16eaaf0df9e5c9ccad619a3856fb5331",
+  "data/font/tt_pfdintextpro-regular.msg": "39ddca18211d3b0a5542abebf7eace56",
   "data/font/tt_pfdintextpro-regular_1.wtb": "08a9f2c01a7999bfc0f6e5393397d16c",
-  "data/font/tt_pfdintextpro-medium.msg": "6103a10c728ab9f6ef6c1813f0eba63c",
+  "data/font/tt_pfdintextpro-medium.msg": "cc8bf71afb70a270c0a523ac5624e430",
   "data/font/tt_pfdintextpro-medium_1.wtb": "08a9f2c01a7999bfc0f6e5393397d16c",
-  "data/font/fttk_yoongothic750.msg": "d4f13c5f806e4f27316d4a5edeb954f2",
+  "data/font/fttk_yoongothic750.msg": "8e5cd3f08671726c67c08f279cfc9dc5",
   "data/font/fttk_yoongothic750_1.wtb": "08a9f2c01a7999bfc0f6e5393397d16c"
  },
- "build_vh": "VH v2026.08.12.1325"
+ "build_vh": "VH v2026.08.12.1446"
 }

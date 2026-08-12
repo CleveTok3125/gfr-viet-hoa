@@ -17,13 +17,19 @@
   No glyph, metric, bitmap or name from the stock game fonts
   (`tt_pfdintextpro-*`, `fttk_yoongothic750`) is stored in this repository,
   and the documented rebuild command reproduces the shipped font byte-for-byte
-  (same msg metrics, same 6743-pair kern table, byte-identical `.wtb`).
-- **Font kerning loosened to the vanilla range.** `src/build_font.py` now
-  clamps GPOS kerning to `[-2, 2]` (was `[-4, 2]`): the wider clamp applied a
-  -4px pull to almost every pair (6743 pairs, median -4), which left text
-  looking noticeably cramped. Rebuilt fonts use the same 6743 pair positions
-  but with values capped at -2, restoring vanilla-like spacing. Applied to all
-  three installed font names (`regular`, `medium`, `fttk_yoongothic750`).
+  (same msg metrics, same 156-pair kern table, byte-identical `.wtb`).
+- **Vietnamese letters flow at their base Latin width.** `src/build_font.py`
+  normalizes the advance of precomposed/marked Latin letters (`ế`, `ỉ`, `ọ`,
+  `ứ`, …) to their base letter's advance, so Vietnamese words no longer
+  jitter wider/narrower than plain Latin text (Barlow ships `ỉ` ~34/1000
+  narrower and `ọ` ~14/1000 narrower than `i`/`o`).
+- **Font kerning kept non-negative for extra spacing.** `src/build_font.py`
+  clamps GPOS kerning to `[0, 2]` (was `[-2, 2]`, originally `[-4, 2]`).
+  Negative kern pulls every pair together and still looked cramped at this
+  size, so 0 is now the loosest value (letters never sit closer than the
+  vanilla spacing, gaining ~2px of air); only 156 positive kern pairs
+  survive. Applied to all three installed font names (`regular`, `medium`,
+  `fttk_yoongothic750`).
 - **Glyph vertical position restored.** The previous build shifted every
   glyph up 3px on its quad (baseline-shift -3); that was reverted, so glyphs
   sit at the same height relative to the line as before.
@@ -31,7 +37,7 @@
   is regenerated from `data/fonts_src/Barlow-Medium.ttf` (SIL OFL 1.1) via
   `src/build_font.py`; Roboto was measured but did not match the stock
   metrics. The rebuild command in `README.md` reproduces the shipped font
-  byte-for-byte (same msg metrics, same 6743-pair kern table, byte-identical
+  byte-for-byte (same msg metrics, same 156-pair kern table, byte-identical
   `.wtb`).
 - **Fonts now match the game's real DDS format (DX10 BC4).** The rebuilt
   `data/fonts.zip` previously wrote RGBA8 atlases, which the game's BC4
