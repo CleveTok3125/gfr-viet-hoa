@@ -37,7 +37,8 @@ rules.json             stat_map + node-transform rules
 TRANSLATION_NOTES.md   translation rules
 decisions.json         highlight decisions, phrase form (written by tr_edit)
 filelist.txt.gz        internal file paths (hash -> path), under data/
-fonts.zip              Vietnamese font overrides (data/font/*), under data/
+fonts.zip              Vietnamese font (Barlow, OFL) overrides (data/font/*), under data/
+                       built entirely from source; contains no game assets
 gfrpatch/              runnable module: python3 -m gfrpatch
 apply.py               one-command patch for end users
 updater.py             diff the table against a newer game build
@@ -198,6 +199,69 @@ patched `.msg` tables, fonts or any other build artifact) and provides no tool
 to package one. Applying the translation always runs on your own install via
 `apply.py` / `gfrpatch` above. Please do not re-upload patched game files
 elsewhere — point people to this repository instead.
+
+### Fonts
+
+The bundled `data/fonts.zip` ships bitmap (SDF) fonts regenerated from
+**Barlow Medium** (Google Fonts, SIL Open Font License 1.1; source under
+`data/fonts_src/Barlow-Medium.ttf`), replacing the stock
+`tt_pfdintextpro-*` and the previous RedTeam-derived yoongothic glyphs.
+Barlow Medium was chosen by measuring every available system + Google-Fonts
+candidate against the stock font's `advance` / ink-width metrics and stroke
+density; its `A` metrics (advance 36, ink width 22 at 38px) match the stock
+font's exactly, so text flows at the vanilla spacing. The `.wtb` atlases use the game's real DDS
+format (`WTB\0` v3 + DDS DX10 BC4_UNORM single-channel SDF, boundary 128,
+2048x2048 — the size the stock `fttk_yoongothic750` atlas already uses),
+identical to the vanilla fonts, so the game's texture loader reads them with
+the correct stride. Glyph ids are the UTF-8 bytes of each code
+point read as a big-endian integer (how the game's lookups work), ASCII +
+Latin-ext + Vietnamese (both the `U+1EA0`–`U+1EFF` block and the precomposed
+`ĩ`/`ũ` at `U+0129`/`U+0169` that block omits), so no slot remapping is needed.
+The BC4 encoder uses the standard 6-step palette D3D decodes with, the
+baseline anchor uses the FreeType ascent (not the hhea ascent) so PIL's
+`ImageDraw.text` baseline matches what the rasterizer records, and GPOS
+kerning is clamped to the vanilla font's `[-2, 2]` range (the sources ship
+strong negative kern that would make letters overlap in-game; a wider
+`[-4, 2]` clamp leaves text looking too cramped).
+Glyphs the Barlow source lacks (arrows, stars, `□`, full-width `（）`, `・`,
+etc.) are rasterized from OFL / public-domain fallback subsets
+(`data/fonts_src/fallback-symbols.ttf` from DejaVu Sans, `fallback-cjk.ttf`
+from Noto Sans CJK; their licenses ship as `LICENSE-dejavu.txt` /
+`LICENSE-noto-cjk.txt`). The repository carries the font under its OFL name
+only (`data/fonts.zip` → `font/barlow-medium.msg` + `font/barlow-medium_1.wtb`).
+At install time `apply.py`/`gfrpatch` writes that font onto each font slot the
+game engine hardcodes (English regular/medium under
+`font/tt_pfdintextpro-{regular,medium}` and the Korean slot under
+`font/fttk_yoongothic750`), rewriting the `.msg`'s `pages.file` so each named
+atlas resolves. Those engine paths exist on the installed game disk *only*
+(for the engine to pick the loose font up) and never appear in this
+repository; the Korean/Hangul glyphs of the previous font are dropped — the
+patch targets the EN/VI UI. **Everything in `data/fonts.zip` and `data/fonts_src/` is built from
+open-license typefaces only — it contains no game assets.** No glyphs,
+metrics, bitmaps or names are copied from the stock game fonts
+(`tt_pfdintextpro-*`, `fttk_yoongothic750`), which are never stored in this
+repository. The `.msg`/`.wtb` shipped in `fonts.zip` are pure build outputs of
+`src/build_font.py` from `Barlow-Medium.ttf` (SIL OFL 1.1) plus OFL /
+public-domain fallback subsets, and the command above reproduces them
+byte-for-byte, so they can always be regenerated instead of redistributed.
+
+To rebuild the font:
+
+```bash
+python3 -m src.build_font --font data/fonts_src/Barlow-Medium.ttf \
+    --fallback data/fonts_src/fallback-symbols.ttf \
+    --fallback data/fonts_src/fallback-cjk.ttf \
+    --out /tmp/font-out --name barlow-medium --size 38 --padding 6 \
+    --page-w 2048 --page-h 2048 --base 29 --line-height 51 --glyph-scale 1.15 \
+    --page-file barlow-medium --lineheight 38 --ascent 28.5 --decent -2
+```
+
+then repack the `.msg`/`_1.wtb` outputs into `data/fonts.zip` as
+`font/barlow-medium.msg` and `font/barlow-medium_1.wtb` (the single OFL font;
+engine-name copies are made by the installer, never stored here). `--size`,
+`--padding` and the `--base`/`--line-height`/`--glyph-scale`/`--lineheight`/
+`--ascent`/`--decent` values above reproduce the shipped font byte-for-byte
+(verified: same msg metrics, same 6743-pair kern table, byte-identical `.wtb`).
 
 ### Maintainer: refresh the translation when the game updates
 

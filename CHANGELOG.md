@@ -2,12 +2,81 @@
 
 ## Unreleased
 
+- **Font shipped under its OFL name only.** `data/fonts.zip` now carries a
+  single built font as `font/barlow-medium.msg` + `font/barlow-medium_1.wtb`;
+  the stock engine font names (`tt_pfdintextpro-*`, `fttk_yoongothic750`)
+  no longer appear in the repository. At install time `patcher.install_fonts`
+  writes that font under the engine's hardcoded font paths (English regular /
+  medium and the Korean slot) with `pages.file` rewritten so each atlas
+  resolves — those names exist on the installed game disk for engine lookup
+  only and are never stored here. `verify.py` checks the engine paths to match.
+- **Font assets are built from source, no game assets shipped.** The bundled
+  `data/fonts.zip` (and `data/fonts_src/`) contains only build outputs of
+  `src/build_font.py` from open-license typefaces — Barlow Medium (SIL OFL
+  1.1) plus OFL/public-domain fallback subsets (DejaVu Sans, Noto Sans CJK).
+  No glyph, metric, bitmap or name from the stock game fonts
+  (`tt_pfdintextpro-*`, `fttk_yoongothic750`) is stored in this repository,
+  and the documented rebuild command reproduces the shipped font byte-for-byte
+  (same msg metrics, same 6743-pair kern table, byte-identical `.wtb`).
+- **Font kerning loosened to the vanilla range.** `src/build_font.py` now
+  clamps GPOS kerning to `[-2, 2]` (was `[-4, 2]`): the wider clamp applied a
+  -4px pull to almost every pair (6743 pairs, median -4), which left text
+  looking noticeably cramped. Rebuilt fonts use the same 6743 pair positions
+  but with values capped at -2, restoring vanilla-like spacing. Applied to all
+  three installed font names (`regular`, `medium`, `fttk_yoongothic750`).
+- **Glyph vertical position restored.** The previous build shifted every
+  glyph up 3px on its quad (baseline-shift -3); that was reverted, so glyphs
+  sit at the same height relative to the line as before.
+- **Font source is Barlow Medium, not Roboto.** The shipped `data/fonts.zip`
+  is regenerated from `data/fonts_src/Barlow-Medium.ttf` (SIL OFL 1.1) via
+  `src/build_font.py`; Roboto was measured but did not match the stock
+  metrics. The rebuild command in `README.md` reproduces the shipped font
+  byte-for-byte (same msg metrics, same 6743-pair kern table, byte-identical
+  `.wtb`).
+- **Fonts now match the game's real DDS format (DX10 BC4).** The rebuilt
+  `data/fonts.zip` previously wrote RGBA8 atlases, which the game's BC4
+  texture loader read with the wrong stride (each glyph sampled the wrong
+  pixels -> stretched/mirrored/crooked glyphs). `src/build_font.py` now emits
+  the same `WTB\0` v3 + DDS DX10 BC4_UNORM single-channel SDF layout the
+  vanilla fonts use (flags `0xA1007`, `LINEARSIZE`, DXGI format 80), with a
+  pure-Python BC4 encoder. Two more glyph-metric bugs were fixed alongside:
+  `glyph_h` is now positive (it was `bottom - top` = always negative, which
+  flipped/tautened the quads) and `advance` now includes the `2*padding` the
+  game expects (`round(glyph_advance) + 12`), matching vanilla metrics.
+- **Font rendering fixes in `src/build_font.py`.** (a) The BC4 encoder used a
+  wrong 6-step palette formula (`(6-i)*r0+(i-1)*r1`); it now emits the standard
+  BC4 palette `((8-i)*r0+(i-1)*r1)//7` that D3D hardware decodes with, so glyph
+  shapes survive round-tripping (previously decode produced noise). (b) The
+  baseline anchor used the hhea ascent, but PIL's `ImageDraw.text` places the
+  baseline at the FreeType ascent (`ImageFont.getmetrics()[0]`, taller); the
+  offset was ~9.5px too low, shifting every glyph up on its quad. Both are
+  verified byte-decodable against the installed fonts.
 - **Pre-patched release zip removed.** `build_patch.py` (which packaged a
   redistributable `data.i` + ko/ tables zip) has been removed from the
   repository. The translation is applied on your own install via
   `apply.py` / `gfrpatch` only; no pre-patched game files are shipped or
   generated. Speaker names in the editor now use Japanese (`name_ja`) as the
   fallback display below English (`name_en`), instead of Korean.
+- **Vietnamese font rebuilt from Barlow (OFL) with fallback glyphs.**
+  `data/fonts.zip` no longer ships the RedTeam-derived yoongothic glyphs.
+  `src/build_font.py` regenerates the SDF bitmap fonts from Google Fonts'
+  **Barlow Medium** (SIL OFL, source under `data/fonts_src/`), carrying ASCII /
+  Latin-ext / Vietnamese (`U+1EA0`..`U+1EFF`, plus the precomposed `ĩ`/`ũ`
+  at `U+0129`/`U+0169` that the 1EA0 block omits) under glyph ids computed as
+  the UTF-8 bytes of each code point read as a big-endian integer (how the
+  game's lookups work), with kerning from the font's GPOS tables. Glyphs the
+  Barlow source lacks (arrows, stars, the full-width `（）`, `・`, `□`, etc.)
+  are rasterized from OFL/public-domain fallback subsets
+  (`data/fonts_src/fallback-*.ttf`, derived from DejaVu Sans and Noto Sans
+  CJK, licenses bundled next to them). The fonts are built in the game's real
+  atlas format (`2048x2048`, base 29, lineHeight 51) and installed under both
+  the English names (`font/tt_pfdintextpro-{regular,medium}.msg` + `_1.wtb`)
+  and the Korean names (`font/fttk_yoongothic750.msg` + `_1.wtb`), redirecting
+  the game's Korean font slot to the patched English font. The previous font's
+  Korean/Hangul glyphs are dropped — the patch targets the EN/VI UI. `apply.py`
+  still installs the loose `data/font/*` overrides and registers their hashes
+  in `data.i`; the font is built from source rather than redistributing the
+  commercial glyphs.
 
 ## Unreleased - voice/text-sync timing fix
 

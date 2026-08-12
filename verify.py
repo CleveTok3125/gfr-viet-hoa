@@ -38,13 +38,16 @@ def patched_files():
     for f in load_translations()["translations"]:
         files.append(os.path.join(table_rel(f), f))
         files.append(os.path.join(table_rel(f), f[: -len(".msg")] + "_tag.msg"))
-    from patcher import FONTS_ZIP
+    from patcher import ENGINE_FONT_PATHS, FONTS_ZIP
 
     if os.path.isfile(FONTS_ZIP):
-        import zipfile
-
-        with zipfile.ZipFile(FONTS_ZIP) as zf:
-            files.extend("data/" + name for name in zf.namelist())
+        # The zip ships the font under its OFL name; at install time it is
+        # written under the engine font paths (see patcher.install_fonts).
+        for rel in ENGINE_FONT_PATHS:
+            files.append("data/" + rel)
+            files.append("data/" + os.path.join(
+                os.path.dirname(rel),
+                os.path.basename(rel)[: -len(".msg")] + "_1.wtb"))
     return files
 
 

@@ -41,36 +41,68 @@ def loose_ko_paths(game, index_bytes):
 FONTS_ZIP = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                          "data", "fonts.zip")
 
+# The repository ships the font under its OFL name only
+# (data/fonts.zip -> font/barlow-medium.msg + font/barlow-medium_1.wtb).
+# The game engine hardcodes its stock font paths below, so the installer
+# writes the built font under those engine paths (they exist on the game
+# disk only, never in the repository) and registers each hash in data.i,
+# letting the game load the loose font instead of the archive one.
+ENGINE_FONT_PATHS = (
+    "font/tt_pfdintextpro-regular.msg",
+    "font/tt_pfdintextpro-medium.msg",
+    "font/fttk_yoongothic750.msg",
+)
+
 
 def install_fonts(game, quiet=False):
-    """Install the bundled Vietnamese fonts (data/fonts.zip) as loose files.
+    """Install the Vietnamese font (built from the OFL source) as loose files.
 
-    The fonts carry the glyphs needed to render Vietnamese (the stock
-    yoongothic font in the archives does not). They are written to
-    data/font/ and each hash is registered in data.i's ExternalFileHashes/
-    ExternalFileSizes so the game loads the loose file instead of the archive
-    one (same mechanism as the ko/ tables). Idempotent.
+    data/fonts.zip carries a single built font under its OFL source name
+    (`barlow-medium`); because the engine resolves fonts by the hardcoded
+    stock paths in ENGINE_FONT_PATHS, each slot receives a copy of that font
+    under the matching engine path (with its `pages.file` rewritten so the
+    atlas resolves), registered in data.i's ExternalFileHashes/
+    ExternalFileSizes. Idempotent; the engine-name files are install-time
+    only and never appear in this repository.
     """
     if not os.path.isfile(FONTS_ZIP):
         if not quiet:
             print(f"  fonts: {FONTS_ZIP} missing - skipped")
         return 0
     import zipfile
-    index = os.path.join(game, "data.i")
+    with zipfile.ZipFile(FONTS_ZIP) as zf:
+        msg_name = next((n for n in zf.namelist() if n.endswith(".msg")), None)
+        wtb_name = next((n for n in zf.namelist() if n.endswith(".wtb")), None)
+        if not msg_name or not wtb_name:
+            if not quiet:
+                print("  fonts: fonts.zip has no .msg/.wtb entries - skipped")
+            return 0
+        msg_data = zf.read(msg_name)
+        wtb_data = zf.read(wtb_name)
+
     extra_external = []
     installed = 0
-    with zipfile.ZipFile(FONTS_ZIP) as zf:
-        for name in zf.namelist():
-            dest = os.path.join(game, "data", name)
-            os.makedirs(os.path.dirname(dest), exist_ok=True)
-            with zf.open(name) as src, open(dest, "wb") as out:
-                out.write(src.read())
-            extra_external.append((datai.hash_path(name), os.path.getsize(dest)))
-            installed += 1
+    for rel in ENGINE_FONT_PATHS:
+        base = os.path.basename(rel)[: -len(".msg")]
+        dest = os.path.join(game, "data", rel)
+        os.makedirs(os.path.dirname(dest), exist_ok=True)
+        obj = msgpack.unpackb(msg_data, raw=False)
+        obj["info"]["pages"][0]["file"] = base
+        with open(dest, "wb") as out:
+            out.write(msgpack.packb(obj, use_bin_type=False))
+        wtb_rel = os.path.join(os.path.dirname(rel), base + "_1.wtb")
+        with open(os.path.join(game, "data", wtb_rel), "wb") as out:
+            out.write(wtb_data)
+        extra_external.append((datai.hash_path(rel), os.path.getsize(dest)))
+        extra_external.append(
+            (datai.hash_path(wtb_rel),
+             os.path.getsize(os.path.join(game, "data", wtb_rel))))
+        installed += 1
+    index = os.path.join(game, "data.i")
     added = datai.rebuild_index(index, extra_external)
     if not quiet:
-        print(f"  fonts: installed {installed} font file(s), "
-              f"{added} registered in data.i")
+        print(f"  fonts: installed {installed} font slot(s) from "
+              f"{msg_name} (OFL source), {added} registered in data.i")
     return installed
 
 
