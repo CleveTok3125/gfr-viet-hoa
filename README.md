@@ -5,6 +5,25 @@ run with **language = Korean (ko)**: the patch replaces the Korean text tables
 with Vietnamese and redirects the Korean UI resources to their English
 counterparts, so no English voice/story lock is lost.
 
+## Contents
+
+- [How it works](#how-it-works)
+- [Repository layout](#repository-layout)
+- [Usage](#usage)
+  - [End user: download the source and run it](#end-user-download-the-source-and-run-it)
+  - [Tag tuning source of truth: `tag_tuning.json`](#tag-tuning-source-of-truth-tag_tuningjson)
+  - [Note on pre-patched distributions](#note-on-pre-patched-distributions)
+  - [Fonts](#fonts)
+  - [Maintainer: refresh the translation when the game updates](#maintainer-refresh-the-translation-when-the-game-updates)
+- [Adding translations](#adding-translations)
+  - [Editing with the TUI editor (`tr_edit`)](#editing-with-the-tui-editor-tr_edit)
+- [Operating this project (handover guide)](#operating-this-project-handover-guide)
+  - [When the game updates](#when-the-game-updates)
+  - [Rebuilding the table from scratch (not normally needed)](#rebuilding-the-table-from-scratch-not-normally-needed)
+  - [Golden rules](#golden-rules)
+- [Known issues](#known-issues)
+- [Disclaimer](#disclaimer)
+
 ## How it works
 
 - `translations.json` is the single source of truth: a map of
