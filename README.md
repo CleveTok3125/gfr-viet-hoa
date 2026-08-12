@@ -220,9 +220,10 @@ Latin-ext + Vietnamese (both the `U+1EA0`–`U+1EFF` block and the precomposed
 The BC4 encoder uses the standard 6-step palette D3D decodes with, the
 baseline anchor uses the FreeType ascent (not the hhea ascent) so PIL's
 `ImageDraw.text` baseline matches what the rasterizer records, and GPOS
-kerning is clamped to the vanilla font's `[-2, 2]` range (the sources ship
-strong negative kern that would make letters overlap in-game; a wider
-`[-4, 2]` clamp leaves text looking too cramped).
+kerning is clamped to a non-negative `[0, 2]` range (the sources ship strong
+negative kern that would make letters overlap in-game; even the stock font's
+`[-2, 2]` leaves some pairs looking too cramped at this size, so 0 is used as
+the loosest value to add extra spacing).
 Glyphs the Barlow source lacks (arrows, stars, `□`, full-width `（）`, `・`,
 etc.) are rasterized from OFL / public-domain fallback subsets
 (`data/fonts_src/fallback-symbols.ttf` from DejaVu Sans, `fallback-cjk.ttf`
@@ -261,7 +262,7 @@ then repack the `.msg`/`_1.wtb` outputs into `data/fonts.zip` as
 engine-name copies are made by the installer, never stored here). `--size`,
 `--padding` and the `--base`/`--line-height`/`--glyph-scale`/`--lineheight`/
 `--ascent`/`--decent` values above reproduce the shipped font byte-for-byte
-(verified: same msg metrics, same 6743-pair kern table, byte-identical `.wtb`).
+(verified: same msg metrics, same 156-pair kern table, byte-identical `.wtb`).
 
 ### Maintainer: refresh the translation when the game updates
 
