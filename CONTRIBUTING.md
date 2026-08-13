@@ -24,7 +24,7 @@ should read `README.md` instead.**
 | Step | What happens |
 |------|--------------|
 | Source | `translations.json` maps `file.msg -> { stable row id (``id_hash_`` or ``id_hash_::subid_hash_``) : Vietnamese string }` — the single source of truth. No English game text is stored in the repository; the English reference is read from the user's own game at patch time. |
-| Tables | `data/system/table/**/ko/*.msg` are msgpack (`rows_`/`column_`); `text_` values are replaced by their row id. Skillboard `Name:\n<stat>` rows are filled at runtime from the stat-only rows translated in the same table (this replaced the old `rules.json` node transform). |
+| Tables | `data/system/table/**/ko/*.msg` are msgpack (`rows_`/`column_`) and the Korean slot is redirected to English first: each row is rewritten to the game's own English text (read from `eng/*.msg` at patch time), then the rows covered by `translations.json` are overwritten with Vietnamese. Untranslated rows stay English — never Korean. Skillboard `Name:\n<stat>` rows are filled at runtime from the stat-only rows translated in the same table (this replaced the old `rules.json` node transform). |
 | Tags | `*_tag.msg` highlight ranges are remapped to the Vietnamese text (`src/remap_tags.py`); the tuned tables are snapshotted in `tag_tuning.json` so installs never depend on leftover on-disk tag state. |
 | Index | `data.i` (FlatBuffers) is rewritten to point every `ui/.../kor/...` entry at its `eng` counterpart, and to fix the declared `ExternalFileSizes` for every patched loose table. |
 

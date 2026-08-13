@@ -8,13 +8,14 @@ against the current string cannot work.
 """
 import os
 import shutil
+from typing import cast
 
 import msgpack
 
 import datai
 from common import table_rel
 from extract import extract
-from patch_engine import read_msg
+from patch_engine import final_text, read_msg
 
 
 def loose_ko_paths(game, index_bytes):
@@ -89,7 +90,7 @@ def install_fonts(game, quiet=False):
         obj = msgpack.unpackb(msg_data, raw=False)
         obj["info"]["pages"][0]["file"] = base
         with open(dest, "wb") as out:
-            out.write(msgpack.packb(obj, use_bin_type=False))
+            out.write(cast(bytes, msgpack.packb(obj, use_bin_type=False)))
         wtb_rel = os.path.join(os.path.dirname(rel), base + "_1.wtb")
         with open(os.path.join(game, "data", wtb_rel), "wb") as out:
             out.write(wtb_data)
@@ -112,10 +113,17 @@ def en_path(file):
 
 def patch_file_indexed(game, index, file, engine, index_bytes):
     """Apply translations to one .msg table, matching each row to its
-    English reference. Returns the same dict shape as PatchEngine.patch_file.
+    English reference.
 
-    Falls back to exact-string matching if the English reference cannot be
-    extracted (e.g. the reference table is absent).
+    Two stages per row: (1) the Korean slot is redirected to English — the
+    row shows the game's own English text when it has no Vietnamese
+    translation; (2) Vietnamese is overwritten onto that EN base for every
+    row the table covers. The game therefore never reads Korean text from a
+    patched table. Falls back to exact-string matching if the English
+    reference cannot be extracted (e.g. the reference table is absent).
+
+    Returns the same dict shape as PatchEngine.patch_file, plus
+    ``en_redirected``.
     """
     path = os.path.join(game, table_rel(file), file)
     data = read_msg(path)
@@ -143,7 +151,7 @@ def patch_file_indexed(game, index, file, engine, index_bytes):
 
     stat_rule = engine._stat_rule(file, en_rows)
 
-    patched = already = 0
+    patched = already = en_redirected = 0
     unmatched = []
     for idx, row in enumerate(disk_rows):
         c = row.get("column_", {})
@@ -154,20 +162,24 @@ def patch_file_indexed(game, index, file, engine, index_bytes):
                 continue
         else:
             src = idx
-        rid, sub, en_txt = en_rows[src]
+        _rid, _sub, en_txt = en_rows[src]
 
-        new = engine.transform(file, c.get("id_hash_", ""),
-                               c.get("subid_hash_", ""), en_txt, stat_rule)
+        vn = engine.transform(file, c.get("id_hash_", ""),
+                              c.get("subid_hash_", ""), en_txt, stat_rule)
+        new = final_text(vn, en_txt)
 
         if new is None:
             unmatched.append(en_txt)
         elif new == c.get("text_", ""):
             already += 1
-        else:
+        elif vn is not None:
             c["text_"] = new
             patched += 1
+        else:
+            c["text_"] = new
+            en_redirected += 1
 
-    if patched:
+    if patched or en_redirected:
         from patch_engine import write_msg
         write_msg(path, data)
 
@@ -177,6 +189,7 @@ def patch_file_indexed(game, index, file, engine, index_bytes):
         "patched": patched,
         "already": already,
         "unmatched": unmatched,
+        "en_redirected": en_redirected,
     }
 
 
@@ -185,12 +198,17 @@ def patch_install(game, index, engine, filelist,
                   do_fix_sizes=True, quiet=False, overrides=None):
     """Apply the Vietnamese patch to an install.
 
+    The Korean slot is redirected to English first (UI assets via data.i,
+    text tables row-by-row), then Vietnamese translations are overwritten on
+    top; untranslated rows stay English, never Korean.
+
     Returns a results dict with keys:
-      patched, already, unmatched, missing_files, ui_redirected,
-      ui_missing, size_fixes, ok_tables, corrupt_tables.
+      patched, already, en_redirected, unmatched, missing_files,
+      ui_redirected, ui_missing, size_fixes, ok_tables, corrupt_tables.
     """
     results = {
-        "patched": 0, "already": 0, "unmatched": 0, "missing_files": [],
+        "patched": 0, "already": 0, "en_redirected": 0, "unmatched": 0,
+        "missing_files": [],
         "ui_redirected": 0, "ui_missing": [], "size_fixes": [],
         "ok_tables": 0, "corrupt_tables": 0,
     }
@@ -222,6 +240,15 @@ def patch_install(game, index, engine, filelist,
         with open(index, "rb") as f:
             index_bytes = f.read()
 
+    # Stage 1 (redirect first): point the Korean slot at English content,
+    # for both UI assets (data.i) and every text table below. The game then
+    # shows English everywhere; Vietnamese is overwritten in Stage 2.
+    if do_ui:
+        changed, missing = datai.patch_ui_lang(index, filelist)
+        results["ui_redirected"] = changed
+        results["ui_missing"] = missing
+        log(f"  ui kor->eng redirected: {changed}, missing (skipped): {len(missing)}")
+
     for file in engine.iter_files():
         path = os.path.join(game, table_rel(file), file)
         if not os.path.isfile(path):
@@ -230,18 +257,15 @@ def patch_install(game, index, engine, filelist,
         r = patch_file_indexed(game, index, file, engine, index_bytes)
         results["patched"] += r["patched"]
         results["already"] += r["already"]
+        results["en_redirected"] += r.get("en_redirected", 0)
         results["unmatched"] += len(r["unmatched"])
         if r["unmatched"]:
             log(f"  {file}: {r['patched']} patched, {r['already']} already, "
-                f"{len(r['unmatched'])} unmatched (e.g. {r['unmatched'][0]!r})")
+                f"{r.get('en_redirected', 0)} redirected to EN, "
+                f"{len(r['unmatched'])} no reference (e.g. {r['unmatched'][0]!r})")
         else:
-            log(f"  {file}: {r['patched']} patched, {r['already']} already")
-
-    if do_ui:
-        changed, missing = datai.patch_ui_lang(index, filelist)
-        results["ui_redirected"] = changed
-        results["ui_missing"] = missing
-        log(f"  ui kor->eng redirected: {changed}, missing (skipped): {len(missing)}")
+            log(f"  {file}: {r['patched']} patched, {r['already']} already, "
+                f"{r.get('en_redirected', 0)} redirected to EN")
 
     install_fonts(game, quiet=quiet)
 
@@ -297,7 +321,8 @@ def report(results, quiet=False):
     log("Summary:")
     log(f"  rows patched     : {results['patched']}")
     log(f"  rows already     : {results['already']}")
-    log(f"  rows unmatched   : {results['unmatched']}")
+    log(f"  rows en redirected: {results.get('en_redirected', 0)}")
+    log(f"  rows no reference: {results['unmatched']}")
     log(f"  missing files    : {len(results['missing_files'])}")
     log(f"  ui redirected    : {results['ui_redirected']}")
     log(f"  sizes fixed      : {len(results['size_fixes'])}")

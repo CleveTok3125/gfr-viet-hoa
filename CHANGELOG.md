@@ -1,6 +1,12 @@
 # Changelog
 
-## Unreleased
+## v0.7.0 - EN redirect, voice-sync timing & Barlow font rebuild (2026-08-13)
+
+- **Korean slot redirects to English first.** The patch copies the game's own
+  English tables (`eng/*.msg`) over the Korean slot row-by-row, then applies
+  Vietnamese translations on top (`src/patcher.py`); untranslated rows now
+  show English instead of Korean. `apply_diff.py` mirrors the same two-stage
+  order.
 
 - **Font shipped under its OFL name only.** `data/fonts.zip` now carries a
   single built font as `font/barlow-medium.msg` + `font/barlow-medium_1.wtb`;
@@ -83,8 +89,6 @@
   still installs the loose `data/font/*` overrides and registers their hashes
   in `data.i`; the font is built from source rather than redistributing the
   commercial glyphs.
-
-## Unreleased - voice/text-sync timing fix
 
 - **Voice sync / text-reveal timing fixed.** The dialogue `*_tag.msg` tables
   carry `times_` markers (char offset + wait time) that pace the text reveal

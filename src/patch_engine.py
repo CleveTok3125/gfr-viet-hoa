@@ -17,6 +17,7 @@ rows that carry a translation in the same table (this reproduces the former
 Only rows whose final value differs from the source are rewritten.
 """
 import re
+from typing import cast
 
 import msgpack
 
@@ -39,9 +40,25 @@ def read_msg(path):
 
 
 def write_msg(path, data):
-    raw = msgpack.packb(data)
+    raw = cast(bytes, msgpack.packb(data))
     with open(path, "wb") as fh:
         fh.write(raw)
+
+
+def final_text(translation, en_text):
+    """Choose the row text for the two-stage patch.
+
+    The Korean slot is redirected to English first, then Vietnamese is
+    overwritten on top: a row shows its Vietnamese translation when one
+    exists, otherwise the game's own English text (so untranslated rows are
+    never left in Korean). Returns ``None`` only when neither a translation
+    nor a usable English reference is available.
+    """
+    if translation is not None:
+        return translation
+    if en_text and en_text.strip():
+        return en_text
+    return None
 
 
 _STAT_HEAD_RE = re.compile(r".+: ?$")

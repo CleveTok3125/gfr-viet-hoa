@@ -19,13 +19,14 @@ so no English voice/story lock is lost.
 
 ## How it works
 
-This patch swaps the game's Korean text tables for Vietnamese and reuses the
-English UI assets, so you keep the English voice track and story. Everything
-is applied automatically by `gfrpatch` to your own game install — there is no
-build step. Rows are matched by their stable engine id, so the repository
-stores **no English (or Korean) game text** — English is read from your own
-game at patch time. The mechanics are explained in
-[`CONTRIBUTING.md`](#maintainer-docs).
+This patch redirects the game's Korean slot to English first — the UI assets
+and every text table — then overwrites Vietnamese onto that English base, so
+untranslated rows stay English rather than Korean, and you keep the English
+voice track and story. Everything is applied automatically by `gfrpatch` to
+your own game install — there is no build step. Rows are matched by their
+stable engine id, so the repository stores **no English (or Korean) game
+text** — English is read from your own game at patch time. The mechanics are
+explained in [`CONTRIBUTING.md`](#maintainer-docs).
 
 ## Repository layout
 

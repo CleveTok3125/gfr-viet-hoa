@@ -22,9 +22,13 @@ from common import bootstrap
 
 bootstrap()
 
+import msgpack
+
 import datai
 from common import find_game_dir, load_translations, table_rel
-from patch_engine import read_msg, row_key, write_msg
+from extract import extract
+from patch_engine import final_text, read_msg, row_key, write_msg
+from patcher import en_path
 
 
 def main():
@@ -56,8 +60,9 @@ def main():
                                 dirs_exist_ok=True)
         print("Backup ->", bk)
 
-    total_patched = 0
-    total_checked = 0
+    total_patched = total_en = total_checked = 0
+    with open(index, "rb") as f:
+        index_bytes = f.read()
     for file, d in trans.items():
         path = os.path.join(game, table_rel(file), file)
         if not os.path.isfile(path):
@@ -66,27 +71,45 @@ def main():
         data = read_msg(path)
         disk_rows = data["rows_"]
 
-        patched = already = 0
+        # Redirect stage: English reference (id -> text) from the same build.
+        en_map = {}
+        raw_en = extract(game, en_path(file), index_bytes)
+        if raw_en is not None:
+            en_obj = msgpack.unpackb(raw_en, raw=False)
+            for r in en_obj["rows_"]:
+                c = r.get("column_", {})
+                t = c.get("text_", "")
+                if isinstance(t, str) and c.get("id_hash_"):
+                    en_map[(c.get("id_hash_", ""), c.get("subid_hash_", ""))] = t
+
+        patched = already = en_red = 0
         for row in disk_rows:
             c = row.get("column_", {})
             if not c.get("id_hash_"):
                 continue
-            vn = d.get(row_key(c.get("id_hash_", ""), c.get("subid_hash_", "")))
-            if vn is None:
+            key = (c.get("id_hash_", ""), c.get("subid_hash_", ""))
+            vn = d.get(row_key(*key))
+            new = final_text(vn, en_map.get(key))
+            if new is None:
                 continue
             total_checked += 1
-            if vn == c.get("text_", ""):
+            if new == c.get("text_", ""):
                 already += 1
-            else:
-                c["text_"] = vn
+            elif vn is not None:
+                c["text_"] = new
                 patched += 1
-        if patched:
+            else:
+                c["text_"] = new
+                en_red += 1
+        if patched or en_red:
             write_msg(path, data)
         total_patched += patched
-        print(f"  {file}: {patched} patched, {already} already "
-              f"({len(d)} entries in table)")
+        total_en += en_red
+        print(f"  {file}: {patched} patched, {already} already, "
+              f"{en_red} redirected to EN ({len(d)} entries in table)")
 
-    print(f"\nTotal patched rows: {total_patched}, checked: {total_checked}")
+    print(f"\nTotal patched rows: {total_patched}, redirected to EN: {total_en}, "
+          f"checked: {total_checked}")
 
     if not args.skip_fix_sizes:
         fixes = datai.fix_sizes(
