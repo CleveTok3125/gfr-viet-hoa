@@ -32,11 +32,6 @@ def load_translations():
         return json.load(f)
 
 
-def load_rules():
-    with open(repo_file("rules.json"), encoding="utf-8") as f:
-        return json.load(f)
-
-
 def check_version(game_dir, fingerprint=None):
     """Compare the English sources of `game_dir` against the build fingerprint
     stored in translations.json. Returns (ok, mismatches, checked).

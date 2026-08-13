@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """Apply manual highlight decisions (VN phrase per entry) to tag_overrides.json.
 
-decisions.json format:
+highlight_decisions.json format: (internal name stays `decisions`)
     { file_base: { rid: { tag_key: { item_idx: ["vn phrase", occurrence] } } } }
+
+(Stored on disk as `highlight_decisions.json`; internal name stays `decisions`.)
 
 occurrence is optional (default 0 = first match). If the phrase is not found
 in the VN text, the entry is skipped and reported.

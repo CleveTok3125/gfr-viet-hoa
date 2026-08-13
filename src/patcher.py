@@ -127,46 +127,44 @@ def patch_file_indexed(game, index, file, engine, index_bytes):
 
     en_obj = msgpack.unpackb(raw_en, raw=False)
     en_rows = en_obj["rows_"]
+    en_rows = [
+        (r.get("column_", {}).get("id_hash_", ""),
+         r.get("column_", {}).get("subid_hash_", ""),
+         r.get("column_", {}).get("text_", ""))
+        for r in en_rows
+        if isinstance(r.get("column_", {}).get("text_"), str)
+    ]
 
     id_map = None
     if len(disk_rows) != len(en_rows):
         id_map = {}
-        for i, r in enumerate(en_rows):
-            c = r["column_"]
-            key = (c.get("id_hash_", ""), c.get("subid_hash_", ""))
-            id_map.setdefault(key, i)
+        for i, (rid, sub, _t) in enumerate(en_rows):
+            id_map.setdefault((rid, sub), i)
 
-    tbl = engine.translations.get(file)
-    do_node = (engine._node_re is not None and
-               file in (engine.rules.get("skillboard_node_transform") or {}).get("files", []))
+    stat_rule = engine._stat_rule(file, en_rows)
 
     patched = already = 0
     unmatched = []
     for idx, row in enumerate(disk_rows):
+        c = row.get("column_", {})
         if id_map is not None:
-            c = row["column_"]
             key = (c.get("id_hash_", ""), c.get("subid_hash_", ""))
             src = id_map.get(key)
             if src is None:
                 continue
         else:
             src = idx
-        en_txt = en_rows[src]["column_"]["text_"]
+        rid, sub, en_txt = en_rows[src]
 
-        new = None
-        if tbl and en_txt in tbl:
-            new = tbl[en_txt]
-        elif do_node:
-            m = engine._node_re.match(en_txt)
-            if m:
-                new = f"{m.group(1)}:\n{engine.stat_map[m.group(2)]}"
+        new = engine.transform(file, c.get("id_hash_", ""),
+                               c.get("subid_hash_", ""), en_txt, stat_rule)
 
         if new is None:
             unmatched.append(en_txt)
-        elif new == row["column_"]["text_"]:
+        elif new == c.get("text_", ""):
             already += 1
         else:
-            row["column_"]["text_"] = new
+            c["text_"] = new
             patched += 1
 
     if patched:

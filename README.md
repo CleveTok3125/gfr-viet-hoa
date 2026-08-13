@@ -22,15 +22,17 @@ so no English voice/story lock is lost.
 This patch swaps the game's Korean text tables for Vietnamese and reuses the
 English UI assets, so you keep the English voice track and story. Everything
 is applied automatically by `gfrpatch` to your own game install — there is no
-build step. (The mechanics are explained in
-[`CONTRIBUTING.md`](#maintainer-docs).)
+build step. Rows are matched by their stable engine id, so the repository
+stores **no English (or Korean) game text** — English is read from your own
+game at patch time. The mechanics are explained in
+[`CONTRIBUTING.md`](#maintainer-docs).
 
 ## Repository layout
 
 | What | Files |
 |------|-------|
 | Tool (code you run) | `gfrpatch/` · `apply.py` — runs the patch |
-| Translation data (json) | `translations.json`, `rules.json`, `decisions.json`, `tag_overrides.json`, `tag_tuning.json` |
+| Translation data (json) | `translations.json` (id-keyed), `highlight_decisions.json`, `tag_overrides.json`, `tag_tuning.json` |
 | Font / pre-built files | `fonts.zip` + `data/` (contains pre-built artifacts) |
 | Docs | `README.md` · `CONTRIBUTING.md` · `TRANSLATION_NOTES.md` |
 
@@ -139,6 +141,12 @@ automatically onto the three engine font slots. To rebuild or tweak it, see
 
 Fan-made localization. All game assets and trademarks belong to Cygames, Inc.
 This is a personal-usage mod.
+
+**Requirements & legality.** This patch only works on a copy of the game you
+own. It does not bypass DRM, does not ship or extract any game assets into the
+repository, and does not patch cracked/illegitimate copies: the build
+fingerprint check expects a genuine, unmodified English `data.i`, and the
+translation writes into your own loose table files.
 
 **Redistribution (GPL v3).** This project is licensed under the **GNU GPL
 v3** (see `LICENSE`). Redistributing or publishing this product in binary /

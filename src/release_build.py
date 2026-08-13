@@ -4,8 +4,8 @@ Wraps ``verify.gen_manifest``: before the manifest is written, records the
 current build timestamp ``VH vYYYY.MM.DD.HHMM`` into:
 
 - ``meta.build_vh`` of ``translations.json``,
-- the in-game version title row (``text_ui.msg``, ``Version {0}``), inserted
-  after the version placeholder and separated by ``" - "``.
+- the in-game version title row (``text_ui.msg``, id ``TXT_TITLE_VERSION``),
+  inserted after the version placeholder and separated by ``" - "``.
 
 The wrapped function then reads ``meta.build_vh`` back from the file, so the
 release manifest records the same stamp.
@@ -32,7 +32,7 @@ def stamp_release(func):
             trans = json.load(fh)
         trans.setdefault("meta", {})["build_vh"] = stamp
         table = trans["translations"].setdefault("text_ui.msg", {})
-        table["Version {0}"] = f"Phiên bản {{0}} - {stamp}"
+        table["TXT_TITLE_VERSION"] = f"Phiên bản {{0}} - {stamp}"
         with open(path, "w", encoding="utf-8") as fh:
             json.dump(trans, fh, ensure_ascii=False, indent=1)
             fh.write("\n")

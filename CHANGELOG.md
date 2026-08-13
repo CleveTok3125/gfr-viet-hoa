@@ -236,9 +236,9 @@
   together with its dialogue highlight markers; `src/tr_edit_core.py` holds
   the UI-free data layer. Each item renders as a *compound string* (VN text
   with inline markers) and Ctrl+S round-trips it back into the three
-  authoring files at once: `translations.json`, `decisions.json`,
-  `tag_overrides.json`.
-- **`decisions.json` authoring layer.** Highlight decisions are stored in
+   authoring files at once: `translations.json`, `decisions.json`
+   (now `highlight_decisions.json`), `tag_overrides.json`.
+- **`decisions.json` authoring layer** (now `highlight_decisions.json`). Highlight decisions are stored in
   phrase form (VN phrase per row id) next to the positional
   `tag_overrides.json`; `src/apply_decisions.py` expands phrases into
   positions against an installed copy, and the editor keeps both files in

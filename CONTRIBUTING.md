@@ -23,8 +23,8 @@ should read `README.md` instead.**
 
 | Step | What happens |
 |------|--------------|
-| Source | `translations.json` maps `file.msg -> { English source string : Vietnamese string }` — the single source of truth. |
-| Tables | `data/system/table/**/ko/*.msg` are msgpack (`rows_`/`column_`); `text_` values are replaced by exact match, then node-transform rules from `rules.json` apply (e.g. skillboard stat names). |
+| Source | `translations.json` maps `file.msg -> { stable row id (``id_hash_`` or ``id_hash_::subid_hash_``) : Vietnamese string }` — the single source of truth. No English game text is stored in the repository; the English reference is read from the user's own game at patch time. |
+| Tables | `data/system/table/**/ko/*.msg` are msgpack (`rows_`/`column_`); `text_` values are replaced by their row id. Skillboard `Name:\n<stat>` rows are filled at runtime from the stat-only rows translated in the same table (this replaced the old `rules.json` node transform). |
 | Tags | `*_tag.msg` highlight ranges are remapped to the Vietnamese text (`src/remap_tags.py`); the tuned tables are snapshotted in `tag_tuning.json` so installs never depend on leftover on-disk tag state. |
 | Index | `data.i` (FlatBuffers) is rewritten to point every `ui/.../kor/...` entry at its `eng` counterpart, and to fix the declared `ExternalFileSizes` for every patched loose table. |
 
@@ -32,15 +32,15 @@ should read `README.md` instead.**
 
 | File | Purpose |
 |------|---------|
-| `translations.json` | EN → VI table (source of truth) |
-| `rules.json` | stat_map + node-transform rules |
+| `translations.json` | row-id → VI table (source of truth) |
 | `TRANSLATION_NOTES.md` | translation rules |
-| `decisions.json` | highlight decisions, phrase form (written by `tr_edit`) |
+| `highlight_decisions.json` | highlight decisions, phrase form (written by `tr_edit`) |
 | `filelist.txt.gz` | internal file paths (hash → path), under `data/` |
 | `fonts.zip` | Vietnamese font (Barlow, OFL) overrides under `data/font/*`; built from source, **no game assets** |
 | `gfrpatch/` | runnable module: `python3 -m gfrpatch` |
 | `apply.py` | one-command patch for end users |
-| `updater.py` | diff the table against a newer game build |
+| `updater.py` | remap the table onto a newer game build (via `src/remap_ids.py`) |
+| `src/remap_ids.py` | id-match → EN-snapshot fuzzy remap engine (reused by `updater.py`) |
 | `verify.py` | hash-check patched files vs release manifest |
 | `rebuild_translations.py` | regenerate the table from a patched install |
 | `update_filelist.py` | fetch the latest file list from GBFRDataTools |
@@ -49,7 +49,7 @@ should read `README.md` instead.**
 | `vendor/` | bundled pure-Python deps (msgpack, flatbuffers) |
 | `src/` | engine, data.i handling, extraction helpers |
 | `src/remap_tags.py` | remap `*_tag.msg` offsets to the VN text (`--write --fix-sizes`) |
-| `src/apply_decisions.py` | expand `decisions.json` phrases into `tag_overrides.json` ranges |
+| `src/apply_decisions.py` | expand `highlight_decisions.json` phrases into `tag_overrides.json` ranges |
 | `src/tag_review.py` | interactive review of unresolved highlight ranges |
 | `src/tag_tuning.py` | dump/merge/write `tag_tuning.json` |
 | `src/tr_edit.py` | interactive TUI editor for text + markers |
@@ -75,15 +75,18 @@ installed via pip.
    (This downloads `filelist.txt` from the upstream GBFRDataTools project and
    packs it into `data/filelist.txt.gz`; you can also point `apply.py` at an
    external copy with `GBFR_FILELIST=/path/to/filelist.txt` instead.)
-3. Diff the English sources of the new build against the table:
+3. Remap the id-keyed table onto the new build:
 
    ```bash
    python3 updater.py --game "/path/to/new/install"
    ```
 
-   This writes `translations_new.json` (exact + auto-accepted fuzzy) and
-   `review.txt`. Strings marked `[NEW]` need a human translation; `[REVIEW]`
-   and `[ACCEPTED]` should be eyeballed.
+   Rows are matched by their stable row id first. Rows whose id disappeared
+   are fuzzy-remapped from the last English snapshot
+   (`data/._en_prev.json`) and reported as `[REMAP]`. This writes
+   `translations_new.json` and `review.txt`, then **refreshes the snapshot**
+   from the new build. Strings marked `[NEW]` need a human translation;
+   `[REMAP]`/`[REVIEW]` should be eyeballed. See `src/remap_ids.py`.
 4. Translate the `[NEW]` strings into `translations_new.json` (follow the
    existing style; keep proper nouns, `{0}` placeholders, and `<d>` codes).
 5. Promote the reviewed table:
@@ -137,7 +140,7 @@ python3 rebuild_translations.py --game "/path/to/patched/install"
 ```
 
 It diffs the English sources (extracted from `data.i`) against the installed
-`ko/` tables and regenerates `translations.json` (with a fresh
+`ko/` tables and regenerates `translations.json` keyed by row id (with a fresh
 `build_fingerprint`).
 
 ### Golden rules
@@ -196,15 +199,17 @@ The plain `apply.py` script (with auto-detection) works identically.
 
 Edit `translations.json` directly, or use the interactive TUI editor
 (`tr_edit.py`) to work on the text together with its highlight markers. Every
-key must be the exact English string as found in the game (extract it with
-`src/extract.py` if unsure), the value the Vietnamese text. Keep proper names,
-format placeholders (`{0}`, `<d>`), and credits/license text unchanged. Run
-`apply.py` on a fresh English install to verify, then ship.
+key is a stable row id — `id_hash_`, or `id_hash_::subid_hash_` when the id is
+split across rows (resolve the id for a game string with `src/tr_edit.py`,
+which shows the id and the English preview read from your install). The value
+is the Vietnamese text. Keep proper names, format placeholders (`{0}`,
+`<d>`), and credits/license text unchanged. Run `apply.py` on a fresh English
+install to verify, then ship.
 
 The table covers the 14 main text tables plus 53 battle-scenario dialogue
 tables (`data/system/table/scenario/ko/*`). Scenario dialogue is based on the
 base-game translation by **TheRedTeam** (before the Endless Ragnarok DLC);
-see `meta.credits` in `translations.json`.
+attribution is kept in `meta.disclaimer` in `translations.json`.
 
 Follow the rules in `TRANSLATION_NOTES.md` when translating. The full editor
 key reference and marker conventions are in the
@@ -290,7 +295,7 @@ PYTHONPATH=src:vendor python3 src/tr_edit.py \
 
 Each entry is shown as a *compound string*: the Vietnamese text with inline
 markers (conventions below). Saving (Ctrl+S) writes back to `translations.json`,
-`decisions.json` and `tag_overrides.json` in one go.
+`highlight_decisions.json` and `tag_overrides.json` in one go.
 
 | Key | Action |
 |-----|--------|
@@ -343,7 +348,7 @@ untouched):
 \{  \}  \\    escape a literal brace / backslash
 ```
 
-Highlight decisions are stored in phrase form in `decisions.json` (VN phrase
+Highlight decisions are stored in phrase form in `highlight_decisions.json` (VN phrase
 per row id). `src/apply_decisions.py` expands them into the positional
 `tag_overrides.json` ranges against an installed copy of the game; the editor
 keeps both files in sync on every save. Highlights that exist only in the

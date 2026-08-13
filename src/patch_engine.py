@@ -1,12 +1,18 @@
 """Core translation engine for Granblue Fantasy: Relink .msg tables.
 
-A .msg file is a msgpack map with a `rows_` list; each row has
-`column_.text_` holding the display string. The engine walks those rows
-and applies, in order:
+A .msg file is a msgpack map with a ``rows_`` list; each row has
+``column_.text_`` holding the display string, plus ``column_.id_hash_`` and
+``column_.subid_hash_`` — stable engine ids that survive game updates. The
+engine walks those rows and writes the Vietnamese value looked up by row id,
+so no English text is ever stored in the repository (the English reference is
+read from the user's own game at patch time).
 
-  1. exact-match from the per-file EN->VI table,
-  2. node-transform rules (e.g. skillboard `Name:\n<stat>` rows),
-  3. format-aware transforms defined in rules.json.
+For skillboard rows of the form ``Name:\\n<stat>`` (e.g. ``Launch, Air
+Combo, and Aerial Barrage:\\nDMG Cap +{0}%``), the stat line is a template
+whose ``{0}`` is filled by the engine at runtime. The row is translated by
+keeping the English name and substituting the stat phrase, using the stat-only
+rows that carry a translation in the same table (this reproduces the former
+``rules.json`` node transform without storing any English game text).
 
 Only rows whose final value differs from the source are rewritten.
 """
@@ -14,67 +20,120 @@ import re
 
 import msgpack
 
+SEP = "::"
+
+
+def row_key(row_id, subid):
+    """Stable dict key for a row: id alone, or id::subid when split."""
+    return row_id if not subid else f"{row_id}{SEP}{subid}"
+
 
 def read_msg(path):
     """Unpack a .msg table from a file path or raw bytes."""
     if isinstance(path, (bytes, bytearray)):
         raw = bytes(path)
     else:
-        with open(path, "rb") as f:
-            raw = f.read()
+        with open(path, "rb") as fh:
+            raw = fh.read()
     return msgpack.unpackb(raw, raw=False)
 
 
 def write_msg(path, data):
     raw = msgpack.packb(data)
-    with open(path, "wb") as f:
-        f.write(raw)
+    with open(path, "wb") as fh:
+        fh.write(raw)
+
+
+_STAT_HEAD_RE = re.compile(r".+: ?$")
+_STAT_FILE = "text_skillboard.msg"
 
 
 class PatchEngine:
-    def __init__(self, translations, rules):
-        self.translations = translations  # {filename: {en: vi}}
-        self.rules = rules or {}
-        self.stat_map = (self.rules.get("stat_map") or {})
-        self._node_re = self._build_node_re()
+    """ID-keyed translation engine.
 
-    def _build_node_re(self):
-        stats = list(self.stat_map.keys())
-        if not stats:
-            return None
-        return re.compile(r"^(.+?): ?\n(" + "|".join(re.escape(s) for s in stats) + r")$")
+    ``translations`` is ``{filename: {id | id::subid: vi}}``.
+    """
 
-    def _transform(self, text, file):
-        """Return the Vietnamese string for `text`, or None if unknown."""
-        tbl = self.translations.get(file)
-        if tbl and text in tbl:
-            return tbl[text]
-        if self._node_re and file in (self.rules.get("skillboard_node_transform") or {}).get("files", []):
-            m = self._node_re.match(text)
+    def __init__(self, translations):
+        self.translations = translations
+        self._stat_re_cache = {}
+
+    def _stat_rule(self, file, rows):
+        """Return ``(node_re, stat_vn)`` for the skillboard stat fallback.
+
+        ``rows`` is a list of ``(id_hash_, subid_hash_, text_)`` from the
+        English source. A stat line is identified as an English string that
+        (a) appears as the tail (after the last newline) of some composite
+        ``Name:\\n<stat>`` row and (b) carries a translation in the table.
+        The regex reproduces the exact shape the old rules.json matched.
+        """
+        if file in self._stat_re_cache:
+            return self._stat_re_cache[file]
+        result = (None, {})
+        if file == _STAT_FILE:
+            tbl = self.translations.get(file) or {}
+            tails = set()
+            for _rid, _sub, text in rows:
+                nl = text.rfind("\n")
+                if nl > 0 and _STAT_HEAD_RE.match(text[:nl]):
+                    tails.add(text[nl + 1:])
+            text_by_key = {row_key(r, s): t for r, s, t in rows}
+            stat_vn = {}
+            for key, vn in tbl.items():
+                t = text_by_key.get(key)
+                if t is not None and t in tails:
+                    stat_vn[t] = vn
+            if stat_vn:
+                pattern = "|".join(re.escape(s) for s in stat_vn)
+                result = (re.compile(r"^(.+?): ?\n(" + pattern + r")$"), stat_vn)
+        self._stat_re_cache[file] = result
+        return result
+
+    def transform(self, file, rid, subid, text, stat_rule=None):
+        """Return the Vietnamese string for a row, or None if unknown."""
+        tbl = self.translations.get(file) or {}
+        key = row_key(rid, subid)
+        if key in tbl:
+            return tbl[key]
+        node_re, stat_vn = stat_rule or (None, {})
+        if node_re:
+            m = node_re.match(text)
             if m:
-                name, stat = m.groups()
-                return f"{name}:\n{self.stat_map[stat]}"
+                return f"{m.group(1)}:\n{stat_vn[m.group(2)]}"
         return None
 
     def patch_file(self, file, path):
-        """Apply translations to the .msg file at `path`.
+        """Apply translations to the .msg file at ``path``.
+
+        Matches rows by their own row ids; the stat fallback derives stat
+        lines from the file's English texts when they are English (for loose
+        fallback installs the disk text may already be Vietnamese, in which
+        case the fallback simply finds nothing, as before).
 
         Returns dict(patched, already, unmatched, rows).
         """
         data = read_msg(path)
+        rows = [
+            (r["column_"].get("id_hash_", ""),
+             r["column_"].get("subid_hash_", ""),
+             r["column_"].get("text_", ""))
+            for r in data["rows_"]
+            if isinstance(r.get("column_", {}).get("text_"), str)
+        ]
+        stat_rule = self._stat_rule(file, rows)
         patched = already = 0
         unmatched = []
-        for row in data["rows_"]:
-            t = row["column_"]["text_"]
-            new = self._transform(t, file)
+        for row, (rid, subid, text) in zip(data["rows_"], rows):
+            new = self.transform(file, rid, subid, text, stat_rule)
             if new is None:
-                unmatched.append(t)
-            elif new == t:
+                unmatched.append(text)
+            elif new == text:
                 already += 1
             else:
                 row["column_"]["text_"] = new
                 patched += 1
-        write_msg(path, data) if patched else None
+        if patched:
+            write_msg(path, data)
         return {
             "file": file,
             "path": path,

@@ -5,6 +5,7 @@ __pycache__/
 vietnam_backup/
 translations_new.json
 review.txt
+data/._en_prev.json
 
 # binary lz4 (replaced by pure-Python src/lz4_block_pure.py)
 vendor/lz4/

@@ -9,7 +9,7 @@ Usage:
 Steps performed, in order:
   1. locate the game (auto-detect or --game)
   2. backup data.i and the ko/ text tables
-  3. patch text tables from translations.json (+ rules.json node transforms)
+  3. patch text tables from translations.json (row-id keyed)
   4. redirect ui/.../kor/... entries to eng in data.i
   5. rewrite declared ExternalFileSizes for every patched file
   6. verify every patched table still unpacks and report stats
@@ -36,7 +36,6 @@ from common import (
     check_version,
     find_game_dir,
     load_filelist,
-    load_rules,
     load_translations,
 )
 from game_version import game_version
@@ -117,8 +116,7 @@ def main():
             sys.exit(2)
 
     trans = load_translations()["translations"]
-    rules = load_rules()
-    engine = PatchEngine(trans, rules)
+    engine = PatchEngine(trans)
 
     meta = load_translations()["meta"]
     ver = game_version(os.path.join(game, "granblue_fantasy_relink.exe"))

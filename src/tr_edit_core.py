@@ -39,7 +39,21 @@ bootstrap()
 
 from common import load_translations, repo_file
 
+SEP = "::"
 HIGHLIGHT_KEYS = ("colors_", "words_", "bolds_")
+
+
+def row_key(row_id, subid):
+    """Stable table key for a row: id alone, or id::subid when split."""
+    return row_id if not subid else f"{row_id}{SEP}{subid}"
+
+
+def split_key(key):
+    """Return (id_hash_, subid_hash_) for a stored table key."""
+    rid, _sep, sub = key.rpartition(SEP)
+    if _sep:
+        return rid, sub
+    return key, ""
 HIGHLIGHT_RE = re.compile(r"\{([cbw]{1,3}):((?:[^{}]|\\.)*)\}")
 PLAYER_RE = re.compile(r"\{p\}")
 SPEAKER_RE = re.compile(r"^\[([^\[\]\n]*)\][ \t]*")
@@ -64,7 +78,7 @@ class Store:
         self.game = game_dir
         self.translations = load_translations()
         self.tables = self.translations.get("translations", {})
-        self.decisions = self._load_json("decisions.json")
+        self.decisions = self._load_json("highlight_decisions.json")
         self.overrides = self._load_json("tag_overrides.json")
         self.tuned = self._load_json("tag_tuning.json")  # spans baked into game
         self.speakers = self._load_json("data/scenario_speakers.json")
@@ -72,7 +86,7 @@ class Store:
         # path -> Store index for atomic saves
         self._paths = {
             "translations.json": repo_file("translations.json"),
-            "decisions.json": repo_file("decisions.json"),
+            "highlight_decisions.json": repo_file("highlight_decisions.json"),
             "tag_overrides.json": repo_file("tag_overrides.json"),
         }
 
@@ -86,8 +100,14 @@ class Store:
 
     # -- id / speaker resolution ------------------------------------------
 
-    def reverse_id_map(self, file):
-        """Return {en_text: [row_id,...]} for a table (EN source)."""
+    def id_text_map(self, file):
+        """Return {row_key: en_text} for a table (EN source).
+
+        ``row_key`` is the id-keyed table key: ``id_hash_`` for a single row,
+        ``id_hash_::subid_hash_`` when the id is split across rows. This is
+        the forward map that resolves a stored row id back to its English
+        text for preview/search when a game dir is supplied.
+        """
         if file in self._id_cache:
             return self._id_cache[file]
         if not self.game:
@@ -96,7 +116,7 @@ class Store:
         kind = "scenario" if file.startswith("text_scenario") else "text"
         rel = f"system/table/{kind}/en/{file}"
         raw = self._extract(rel)
-        rev = {}
+        m = {}
         if raw:
             try:
                 rows = msgpack.unpackb(raw, raw=False)["rows_"]
@@ -105,11 +125,11 @@ class Store:
             for r in rows:
                 c = r.get("column_", {})
                 tx = c.get("text_", "")
-                hid = c.get("id_hash_", "")
-                if tx:
-                    rev.setdefault(tx, []).append(hid)
-        self._id_cache[file] = rev
-        return rev
+                key = row_key(c.get("id_hash_", ""), c.get("subid_hash_", ""))
+                if tx and key:
+                    m[key] = tx
+        self._id_cache[file] = m
+        return m
 
     def _extract(self, rel):
         if not self.game:
@@ -230,7 +250,7 @@ class Store:
 
     def save_all(self):
         self._atomic("translations.json", self.translations)
-        self._atomic("decisions.json", self.decisions)
+        self._atomic("highlight_decisions.json", self.decisions)
         self._atomic("tag_overrides.json", self.overrides)
 
     def _atomic(self, rel, data):
@@ -258,14 +278,25 @@ class Store:
 class Item:
     """One translatable entry with its resolved identity + markers."""
 
-    __slots__ = ("en", "file", "ids", "markers", "player_pos", "speaker", "vn")
+    __slots__ = (
+        "en",
+        "file",
+        "ids",
+        "key",
+        "markers",
+        "player_pos",
+        "speaker",
+        "subid",
+        "vn",
+    )
 
-    def __init__(self, store, file, en, vn):
+    def __init__(self, store, file, key, vn):
         self.file = file
-        self.en = en
+        self.key = key
         self.vn = vn
-        rev = store.reverse_id_map(file)
-        self.ids = rev.get(en, [])
+        rid, self.subid = split_key(key)
+        self.ids = [rid] if rid else []
+        self.en = store.id_text_map(file).get(key, "")
         self.speaker = store.speaker_label(self.ids)
         self.markers, self.player_pos = _load_markers(
             store, file, self.ids, vn)
@@ -275,7 +306,7 @@ def iter_items(store, bases=None, holds=None):
     """Yield every item of the chosen table files.
 
     ``bases`` restricts to a set of table basenames; ``holds`` is an optional
-    dict reused to keep one Item per (file,en) across calls.
+    dict reused to keep one Item per (file,key) across calls.
     """
     tables = store.tables
     bases = set(bases) if bases else None
@@ -283,13 +314,13 @@ def iter_items(store, bases=None, holds=None):
         base = file[:-len(".msg")]
         if bases is not None and base not in bases:
             continue
-        for en, vn in table.items():
-            key = (file, en)
-            it = holds.get(key) if holds else None
+        for key, vn in table.items():
+            kk = (file, key)
+            it = holds.get(kk) if holds else None
             if it is None:
-                it = Item(store, file, en, vn)
+                it = Item(store, file, key, vn)
                 if holds is not None:
-                    holds[key] = it
+                    holds[kk] = it
             yield it
 
 
@@ -301,25 +332,26 @@ class ScanItem:
     so a full-text table scan stays cheap.
     """
 
-    __slots__ = ("en", "file", "ids", "speaker", "vn")
+    __slots__ = ("en", "file", "ids", "key", "speaker", "subid", "vn")
 
-    def __init__(self, store, file, en, vn):
+    def __init__(self, store, file, key, vn):
         self.file = file
-        self.en = en
+        self.key = key
         self.vn = vn
-        rev = store.reverse_id_map(file)
-        self.ids = rev.get(en, [])
+        rid, self.subid = split_key(key)
+        self.ids = [rid] if rid else []
+        self.en = store.id_text_map(file).get(key, "")
         self.speaker = store.speaker_label(self.ids)
 
     def materialize(self, store):
         """Promote to a full :class:`Item` (loads markers for one row)."""
-        return Item(store, self.file, self.en, self.vn)
+        return Item(store, self.file, self.key, self.vn)
 
 
 def iter_scan(store, bases=None):
     """Yield a :class:`ScanItem` for every row, skipping marker loading.
 
-    ``bases`` restricts to a set of table basenames. The reverse id map is
+    ``bases`` restricts to a set of table basenames. The id -> EN map is
     cached per file inside the store, so a full scan never re-reads a table.
     """
     tables = store.tables
@@ -328,8 +360,8 @@ def iter_scan(store, bases=None):
         base = file[:-len(".msg")]
         if bases is not None and base not in bases:
             continue
-        for en, vn in table.items():
-            yield ScanItem(store, file, en, vn)
+        for key, vn in table.items():
+            yield ScanItem(store, file, key, vn)
 
 
 _WILDCARD_RE = re.compile(r"[\*\?]")
@@ -899,10 +931,10 @@ def apply_edit(store, item, compound):
     base = item.file[:-len(".msg")]
     # 1. translations
     table = store.tables[item.file]
-    if item.en in table:
-        table[item.en] = vn
+    if item.key in table:
+        table[item.key] = vn
     else:
-        warnings.append(f"{item.file}: EN key not found; text not saved")
+        warnings.append(f"{item.file}: row id not found; text not saved")
     # 2. decisions (per matched rid)
     ren = renumber(highlights)
     for rid in item.ids:
@@ -1013,17 +1045,17 @@ def apply_text_replace(store, item, regex, repl):
 # --------------------------------------------------------------------------
 
 
-def self_test(store, file, en):
+def self_test(store, file, key):
     """Round-trip an item: build compound, parse it back, assert no change."""
     holds = {}
     item = next((it for it in iter_items(store, bases={file[:-len(".msg")]},
                                         holds=holds)
-                 if it.en == en), None)
+                 if it.key == key), None)
     if item is None:
-        print(f"self-test: item not found: {en}")
+        print(f"self-test: item not found: {key}")
         return False
     table = store.tables[file]
-    before_vn = table[en]
+    before_vn = table[key]
     base = file[:-len(".msg")]
     before_dec = {r: copy.deepcopy(d)
                   for r, d in store.decisions.get(base, {}).items()}
@@ -1032,7 +1064,7 @@ def self_test(store, file, en):
     compound = build_compound(item)
     _speaker, vn2, _, _ = parse_compound(compound)
     warnings = apply_edit(store, item, compound)
-    ok = table[en] == before_vn and not warnings
+    ok = table[key] == before_vn and not warnings
     ok = ok and all(item.vn == vn2 for _ in [0])
     # restore snapshots so self-test is non-destructive
     _restore(store, base, before_dec, before_ov)

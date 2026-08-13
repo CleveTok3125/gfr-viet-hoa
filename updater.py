@@ -1,27 +1,27 @@
 #!/usr/bin/env python3
 """Rebuild translations.json against a newer game build.
 
-Usage:
-    python3 updater.py --game <new_install> [--out translations_new.json]
+This is a thin wrapper around ``src/remap_ids.py``'s remapping engine:
 
-For every text table, the English source is extracted from the new data.i and
-each unique string is matched against the current table:
-  * exact match      -> translation carried over
-  * high-confidence  -> difflib ratio >= 0.95, added automatically
-  * fuzzy match      -> 0.90..0.95, written to review.txt for confirmation
-  * no match         -> listed in review.txt as needing a new translation
+  * rows whose stable id still exists are carried over unchanged;
+  * rows whose id disappeared are fuzzy-remapped from the English snapshot
+    (``data/._en_prev.json``) onto their new id and reported;
+  * genuinely new rows are listed in ``review.txt`` for a fresh translation.
+
+After a successful run the English snapshot is refreshed from the new build.
 
 Writes:
-    translations_new.json   candidate updated table
-    review.txt              strings that need human review / translation
+    translations_new.json   candidate updated table (schema 2)
+    review.txt              remapped / new rows that need a human look
+
+Usage:
+    python3 updater.py --game <new_install> [--out translations_new.json]
+        [--snapshot data/._en_prev.json] [--accept 0.90] [--dry-run]
 """
 import argparse
-import difflib
 import json
 import os
 import sys
-
-import msgpack
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
@@ -29,24 +29,18 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src
 from common import bootstrap
 
 bootstrap()
-from common import load_translations, repo_file, table_rel
-from extract import extract
-from game_version import game_version
-
-FUZZY_ACCEPT = 0.95
-FUZZY_REVIEW = 0.90
-
-
-def en_path(file):
-    """EN-source path inside data.i for a given table file."""
-    rel = table_rel(file).replace("/ko", "/en")
-    return rel[len("data/"):]
+from common import repo_file
+from remap_ids import ACCEPT, DEFAULT_SNAPSHOT, REVIEW, remap_file
 
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--game", required=True, help="path to the newer GBF Relink install")
     ap.add_argument("--out", default=None, help="output json path")
+    ap.add_argument("--snapshot", default=DEFAULT_SNAPSHOT,
+                    help="EN snapshot used for fuzzy remap and refreshed on write")
+    ap.add_argument("--accept", type=float, default=ACCEPT)
+    ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
 
     game = args.game
@@ -54,70 +48,62 @@ def main():
         print(f"data.i not found under {game!r}")
         sys.exit(1)
 
-    trans = load_translations()["translations"]
-    new_trans = {f: dict(m) for f, m in trans.items()}
+    from common import load_translations
 
-    review = []
-    stats = {"exact": 0, "accepted": 0, "fuzzy": 0, "missing": 0}
+    doc = load_translations()
+    snap = {}
+    if os.path.isfile(args.snapshot):
+        with open(args.snapshot, encoding="utf-8") as fh:
+            snap = json.load(fh)
 
-    for file, table in trans.items():
-        path = os.path.join(en_path(file), file)
-        raw = extract(game, path)
-        if raw is None:
-            print(f"  WARN: {path} not found in this build - skipped")
+    new_trans = {}
+    snap_new = {}
+    counts = {"accepted": 0, "remap": 0, "review": 0, "new": 0, "skip": 0}
+    review_lines = []
+    for file, table in sorted(doc["translations"].items()):
+        out, snap_file, report = remap_file(game, file, table, snap, accept=args.accept)
+        if out is None:
+            counts["skip"] += 1
+            print(f"  SKIP {file}: table not found in this build")
             continue
-        data = msgpack.unpackb(raw, raw=False)
-        strings = {r["column_"]["text_"] for r in data["rows_"]
-                   if isinstance(r.get("column_", {}).get("text_"), str)}
+        new_trans[file] = out
+        snap_new[file] = snap_file
+        for kind, key, new_en, matched, score in report:
+            counts[kind] += 1
+            if kind in ("remap", "review"):
+                review_lines.append(
+                    f"[{kind.upper()} {score}] {file} {key}\n"
+                    f"  new: {new_en!r}\n  old: {matched!r}\n")
+            elif kind == "new":
+                review_lines.append(f"[NEW] {file} {key}\n  {new_en!r}\n")
 
-        if not strings:
-            print(f"  {file}: no strings?")
-            continue
+    counts.pop("skip", None)
+    print("counts:", counts)
 
-        known = set(table)
-        exact = strings & known
-        stats["exact"] += len(exact)
+    if args.dry_run:
+        print("dry-run: nothing written")
+        return 0
 
-        unknown = strings - known
-        for seq in sorted(unknown):
-            pool = [k for k in table if abs(len(k) - len(seq)) <= max(4, 0.25 * len(seq))]
-            match = difflib.get_close_matches(seq, pool, n=1, cutoff=FUZZY_REVIEW)
-            if not match:
-                stats["missing"] += 1
-                review.append(f"[NEW] {file}\n  {seq!r}\n")
-                continue
-            best, score = match[0], None
-            sm = difflib.SequenceMatcher(None, seq, best)
-            score = sm.ratio()
-            if score >= FUZZY_ACCEPT:
-                new_trans[file][seq] = table[best]
-                stats["accepted"] += 1
-                review.append(f"[ACCEPTED {score:.3f}] {file}\n  {seq!r} -> {table[best]!r}\n")
-            else:
-                stats["fuzzy"] += 1
-                review.append(
-                    f"[REVIEW {score:.3f}] {file}\n  {seq!r}\n  suggestion: {table[best]!r}\n")
+    if review_lines:
+        with open("review.txt", "w", encoding="utf-8") as fh:
+            fh.write("\n".join(review_lines))
+        print(f"wrote review.txt ({len(review_lines)} rows)")
+
+    from remap_ids import compute_fingerprint
 
     out_path = args.out or repo_file("translations_new.json")
-    meta = {
-        "game": "Granblue Fantasy: Relink",
-        "format": 1,
-        "description": "EN->VI translation table (updater output, review before release)",
-    }
-    ver = game_version(os.path.join(game, "granblue_fantasy_relink.exe"))
-    if ver:
-        meta["build"] = ver
-    with open(out_path, "w", encoding="utf-8") as f:
-        json.dump({"meta": meta, "translations": new_trans}, f,
+    meta = dict(doc["meta"])
+    fp = compute_fingerprint(game)
+    if len(fp) == 2:
+        meta["build_fingerprint"] = fp
+    with open(out_path, "w", encoding="utf-8") as fh:
+        json.dump({"meta": meta, "translations": new_trans}, fh,
                   ensure_ascii=False, indent=1)
-    with open(os.path.join(os.path.dirname(out_path), "review.txt"), "w", encoding="utf-8") as f:
-        f.write("\n".join(review))
+    print(f"wrote {out_path}")
 
-    print(f"Strings matched exactly : {stats['exact']}")
-    print(f"Accepted (>= {FUZZY_ACCEPT}) : {stats['accepted']}")
-    print(f"Need review (0.90..{FUZZY_ACCEPT}): {stats['fuzzy']}")
-    print(f"New (untranslated)      : {stats['missing']}")
-    print(f"Wrote {out_path} and review.txt")
+    with open(args.snapshot, "w", encoding="utf-8") as fh:
+        json.dump(snap_new, fh, ensure_ascii=False, indent=1)
+    print(f"refreshed EN snapshot {args.snapshot}")
 
 
 if __name__ == "__main__":
