@@ -1,11 +1,11 @@
 """Apply translations.json to an install by matching each row to its
-English reference (by index / id_hash), not by the current display text.
+stable row id (id_hash_ / subid_hash_), not by the current display text.
 
 This is the correct update path: after a translation edit (or a game
 update), the ko/ tables may already hold Vietnamese (or a different
-language) text, so matching the English key against the on-disk string
-cannot work. Instead we extract the English reference from data.i and
-write the Vietnamese value onto the matching row.
+language) text, so matching an English key against the on-disk string
+cannot work. The engine ids survive updates, so the row is located and
+the Vietnamese value written by id regardless of the on-disk language.
 
 Usage:
     python3 apply_diff.py [--game <path>] [--skip-fix-sizes] [--no-backup]
@@ -21,24 +21,10 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src
 from common import bootstrap
 
 bootstrap()
-import msgpack
 
 import datai
 from common import find_game_dir, load_translations, table_rel
-from extract import extract
-from patch_engine import read_msg, write_msg
-
-
-def en_path(file):
-    return table_rel(file).replace("/ko", "/en")[len("data/"):] + "/" + file
-
-
-def load_en_rows(game, file):
-    data = extract(game, en_path(file))
-    if data is None:
-        return None
-    obj = msgpack.unpackb(data, raw=False)
-    return obj["rows_"]
+from patch_engine import read_msg, row_key, write_msg
 
 
 def main():
@@ -73,47 +59,26 @@ def main():
     total_patched = 0
     total_checked = 0
     for file, d in trans.items():
-        en_rows = load_en_rows(game, file)
         path = os.path.join(game, table_rel(file), file)
         if not os.path.isfile(path):
             print("  MISSING:", file)
             continue
         data = read_msg(path)
         disk_rows = data["rows_"]
-        if en_rows is None:
-            print("  NO EN REF:", file)
-            continue
-
-        id_map = None
-        if len(disk_rows) != len(en_rows):
-            id_map = {}
-            for i, r in enumerate(en_rows):
-                c = r["column_"]
-                key = (c.get("id_hash_", ""), c.get("subid_hash_", ""))
-                id_map.setdefault(key, i)
-        else:
-            # rows align by index on the same build
-            pass
 
         patched = already = 0
-        for idx, row in enumerate(disk_rows):
-            if id_map is not None:
-                c = row["column_"]
-                key = (c.get("id_hash_", ""), c.get("subid_hash_", ""))
-                src = id_map.get(key)
-                if src is None:
-                    continue
-            else:
-                src = idx
-            en = en_rows[src]["column_"]["text_"]
-            vn = d.get(en)
+        for row in disk_rows:
+            c = row.get("column_", {})
+            if not c.get("id_hash_"):
+                continue
+            vn = d.get(row_key(c.get("id_hash_", ""), c.get("subid_hash_", "")))
             if vn is None:
                 continue
             total_checked += 1
-            if vn == row["column_"]["text_"]:
+            if vn == c.get("text_", ""):
                 already += 1
             else:
-                row["column_"]["text_"] = vn
+                c["text_"] = vn
                 patched += 1
         if patched:
             write_msg(path, data)

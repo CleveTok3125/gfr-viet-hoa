@@ -2,6 +2,11 @@
 entries whose placeholders / highlight tags were corrupted by the original
 machine translation pass.
 
+NOTE: Retired after the migration to ID-keyed translations (schema 2). That
+format stores no English text, so the English-keyed MANUAL_FIXES and the
+EN->VI newline realign pass cannot apply; the script refuses to run on schema-2
+data.
+
 Run:  python3 fix_translations.py [--out translations.json]
 """
 import json
@@ -76,6 +81,11 @@ def main():
     out = sys.argv[1] if len(sys.argv) > 1 else "translations.json"
     with open(out, encoding="utf-8") as f:
         data = json.load(f)
+
+    if data.get("meta", {}).get("schema") not in (None, 1):
+        print("translations.json is ID-keyed (schema 2): this EN-keyed fix "
+              "tool no longer applies. See the module docstring.")
+        sys.exit(1)
 
     shutil.copy(out, out + ".bak")
     tr = data["translations"]

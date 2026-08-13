@@ -2,9 +2,10 @@
 """Rebuild translations.json by diffing the pristine EN tables (extracted
 from data.i) against the current Vietnamese ko/ tables.
 
-Every row where EN != VI becomes an exact EN->VI entry. Rows where they are
-equal (unchanged, e.g. proper nouns) are not emitted. Conflicts (same EN,
-different VI) keep the most frequent VI and are reported for review.
+Every row where EN != VI becomes an id->VI entry keyed by its stable row id
+(``id_hash_`` / ``id_hash_::subid_hash_``). Rows where they are equal
+(unchanged, e.g. proper nouns) are not emitted. Conflicts (same id, different
+VI) keep the most frequent VI and are reported for review.
 
 This guarantees translations.json reproduces exactly the installed patch.
 
@@ -25,7 +26,7 @@ bootstrap()
 from common import repo_file
 from extract import extract
 from game_version import game_version
-from patch_engine import read_msg
+from patch_engine import read_msg, row_key
 
 EN_PREFIX = "system/table/text/en"
 VN_TEXT_DIR = "data/system/table/text/ko"
@@ -89,34 +90,36 @@ def main():
         vn = read_msg(os.path.join(game, vn_dir, fname))
         rows = min(len(en["rows_"]), len(vn["rows_"]))
         table = merged.setdefault(fname, {})
-        per_en = collections.defaultdict(collections.Counter)
+        per_key = collections.defaultdict(collections.Counter)
         for i in range(rows):
-            e = en["rows_"][i]["column_"]["text_"]
-            v = vn["rows_"][i]["column_"]["text_"]
+            ec = en["rows_"][i]["column_"]
+            vc = vn["rows_"][i]["column_"]
+            e, v = ec.get("text_", ""), vc.get("text_", "")
             if not isinstance(e, str) or not isinstance(v, str):
                 continue
             if e != v:
-                per_en[e][v] += 1
-        for e, counters in per_en.items():
+                key = row_key(ec.get("id_hash_", ""), ec.get("subid_hash_", ""))
+                per_key[key][v] += 1
+        for key, counters in per_key.items():
             vi, cnt = counters.most_common(1)[0]
             if len(counters) > 1:
-                conflicts.append((fname, e, cnt, dict(counters)))
-            table[e] = vi
+                conflicts.append((fname, key, cnt, dict(counters)))
+            table[key] = vi
         print(f"{fname}: en_rows={len(en['rows_'])} vn_rows={len(vn['rows_'])} "
               f"entries={len(table)}")
 
     total = sum(len(v) for v in merged.values())
     print("total entries:", total, "conflicts:", len(conflicts))
-    for fname, e, cnt, others in conflicts[:20]:
-        print("  CONFLICT", fname, repr(e[:50]), "kept", cnt,
+    for fname, key, cnt, others in conflicts[:20]:
+        print("  CONFLICT", fname, repr(key[:50]), "kept", cnt,
               "others", {k: v for k, v in others.items()})
 
     out = {
         "meta": {
             "game": "Granblue Fantasy: Relink",
             "format": 1,
-            "description": "EN->VI translation table keyed by exact string "
-                           "found in .msg rows",
+            "description": "VI translation table keyed by stable row ids "
+                           "(id_hash_ or id_hash_::subid_hash_)",
             "credits": {
                 "scenario": "Scenario dialogue translation by TheRedTeam "
                             "(base game, before the Endless Ragnarok DLC)",

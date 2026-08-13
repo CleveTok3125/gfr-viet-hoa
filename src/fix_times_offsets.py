@@ -13,8 +13,9 @@ Usage:
     python3 src/fix_times_offsets.py --game <install> [--write]
 Without --write it only reports what would change.
 
-The VN text is resolved from translations.json (EN -> VN); the EN text comes
-from the game archive's en/ scenario+text tables (id_hash_ -> text_).
+The VN text is resolved from translations.json by stable row id
+(id_hash_ or id_hash_::subid_hash_); the EN text comes from the game archive's
+en/ scenario+text tables (id_hash_ -> text_).
 """
 import argparse
 import json
@@ -30,6 +31,7 @@ bootstrap()
 import msgpack
 
 from extract import extract
+from patch_engine import row_key
 from remap_tags import char_map, remap_times
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -73,10 +75,11 @@ def main():
             if "times_" not in rec or not rec["times_"]:
                 continue
             rid = rec.get("id_", "")
+            key = row_key(rid, rec.get("subid_", ""))
             en_txt = en_text.get(rid, "")
             if not en_txt:
                 continue
-            vn_txt = vn_table.get(en_txt, "")
+            vn_txt = vn_table.get(key, "")
             if not vn_txt or vn_txt == en_txt:
                 continue
             m = char_map(en_txt, vn_txt)

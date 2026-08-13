@@ -22,7 +22,6 @@ from common import (
     check_version,
     find_game_dir,
     load_filelist,
-    load_rules,
     load_translations,
 )
 from game_version import game_version
@@ -154,8 +153,7 @@ def main():
               "to refresh.")
 
     trans = load_translations()["translations"]
-    rules = load_rules()
-    engine = PatchEngine(trans, rules)
+    engine = PatchEngine(trans)
     filelist = load_filelist()
     overrides = {}
     overrides_path = os.path.join(REPO, "tag_overrides.json")

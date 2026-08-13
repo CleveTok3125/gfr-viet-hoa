@@ -94,7 +94,7 @@ thành, để `-` cho mục chưa làm.
 | `Bursting with Power`            | Tràn Đầy Sức Mạnh                      |     x      |     x      |          -           |          -           |          -          |
 
 - **Hội thoại:** toàn bộ dialogue của chương đã dịch.
-- **Highlight:** mục `decisions.json` / `tag_overrides.json` cho các dòng trong
+- **Highlight:** mục `highlight_decisions.json` / `tag_overrides.json` cho các dòng trong
   chương đã được rà soát và khớp với text hiện tại.
 - **Voice-sync (times_):** các marker `times_` đã kiểm tra (chỉ cần đụng tay
   khi remap tự động đặt sai điểm ngắt; xem quy tắc F9 ở trên).

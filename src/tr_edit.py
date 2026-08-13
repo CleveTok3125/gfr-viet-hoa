@@ -4,7 +4,7 @@
 A full-screen editor built on `textual`. The editable text is a *compound
 string*: the VN translation with marker tokens inline (see tr_edit_core for
 the marker convention). Saving writes the parsed result back to
-translations.json, decisions.json and tag_overrides.json.
+translations.json, highlight_decisions.json and tag_overrides.json.
 
 Usage:
     python3 -m src.tr_edit [--game <dir>] [--file <base>]
@@ -792,7 +792,7 @@ class TrEditApp(App):
         table.clear()
         self.items = found
         self.items_idx = found_idx
-        self.rows_by_key = {it.file + "\u0000" + it.en: it for it in found}
+        self.rows_by_key = {it.file + "\u0000" + it.key: it for it in found}
         for i, it in enumerate(found):
             ids = ",".join(it.ids[:2])
             if len(it.ids) > 2:
@@ -805,7 +805,7 @@ class TrEditApp(App):
                 nid = nid[:17] + "…"
             table.add_row(str(found_idx[i]), nid, ids or "-",
                           (it.speaker or "")[:14] or "-",
-                          en_line, key=(it.file, it.en))
+                          en_line, key=(it.file, it.key))
         # selection: keep the current row while editing (dirty), else pick
         # first / preserved key. RowHighlighted does not re-fire after a
         # full repopulate, so select + load explicitly. Guard against the
@@ -825,7 +825,7 @@ class TrEditApp(App):
             # cursor stranded at the previous row after clear()+repopulate.
             skey = sel_key[0] + "\u0000" + sel_key[1]
             target_idx = next((i for i, r in enumerate(self.items)
-                               if r.file + "\u0000" + r.en == skey), None)
+                               if r.file + "\u0000" + r.key == skey), None)
             if target_idx is None:
                 try:
                     target_idx = table.get_row_index(sel_key)
@@ -899,7 +899,7 @@ class TrEditApp(App):
 
     def load_item(self, item) -> None:
         item = self._full_item(item)
-        self.current_key = (item.file, item.en)
+        self.current_key = (item.file, item.key)
         self.current_item = item
         self._render_preview(item)
         spk = item.speaker or "(none)"
@@ -918,7 +918,7 @@ class TrEditApp(App):
         """Materialize a light ScanItem into a full Item (once, cached)."""
         if isinstance(item, ScanItem):
             item = item.materialize(self.store)
-            self.rows_by_key[item.file + "\u0000" + item.en] = item
+            self.rows_by_key[item.file + "\u0000" + item.key] = item
         return item
 
     def _render_preview(self, item) -> None:
@@ -1388,7 +1388,7 @@ class TrEditApp(App):
                             "Ctrl+R to discard", severity="warning", timeout=4)
             return
         it = self.current_item
-        key = (it.file, it.en)
+        key = (it.file, it.key)
         # Cancel a pending debounced search so its delayed refresh_table cannot
         # run after us and reset the cursor back to the first row.
         if self._search_timer is not None:
@@ -1428,7 +1428,7 @@ class TrEditApp(App):
         self.notify(f"Context: {self.base}.msg (item idx {idx})", timeout=6)
 
     def _enum_index_of(self, key) -> int:
-        """Return the enumeration position of ``key=(file, en)`` inside its
+        """Return the enumeration position of ``key=(file,id-key)`` inside its
         table (matching the index column), or -1 if never encountered before
         MAX_ROWS scanning is impractical for a huge file header check.
         """
@@ -1436,7 +1436,7 @@ class TrEditApp(App):
         base = base.removesuffix(".msg")
         bases = {base} if base else None
         for idx, it in enumerate(iter_scan(self.store, bases=bases)):
-            if it.file == key[0] and it.en == key[1]:
+            if it.file == key[0] and it.key == key[1]:
                 return idx
         return -1
 
@@ -1555,7 +1555,11 @@ class TrEditApp(App):
         return sorted({f[:-len(".msg")] for f in self.store.tables})
 
     def _all_ids(self):
-        """Sorted row ids for the ID filter suggestion (cached per store)."""
+        """Sorted row ids for the ID filter suggestion (cached per store).
+
+        Under the ID-keyed table every stored key carries its row id (possibly
+        suffixed with ``::subid``); the suggestion list keeps the id part.
+        """
         cache = getattr(self.store, "_id_suggest_cache", None)
         if cache is None:
             cache = self.store._id_suggest_cache = set()
@@ -1563,10 +1567,8 @@ class TrEditApp(App):
             for file in self.store.tables:
                 if not file.startswith("text_scenario"):
                     continue
-                rev = self.store.reverse_id_map(file)
-                for en in self.store.tables[file]:
-                    for rid in rev.get(en, []):
-                        cache.add(rid)
+                for key in self.store.tables[file]:
+                    cache.add(key.split("::", 1)[0])
         return sorted(cache)
 
     def _speaker_names(self):
