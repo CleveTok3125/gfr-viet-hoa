@@ -640,6 +640,66 @@ def vn_index_at(compound, pos):
     return vn
 
 
+def vn_index_to_compound(compound, vn, offset):
+    """Map a plain-VN index back to its position in the compound editor string.
+
+    The reverse of :func:`vn_index_at` (same escape/marker conventions: ``\\{``,
+    ``\\}``, ``\\\\``, the ``{p}`` player point and ``{c:..}``/``{w:..}``/
+    ``{b:..}`` highlight markers). Returns the compound index where the plain-VN
+    character at ``offset`` sits, or the end of the compound when past it.
+    A highlight phrase may itself contain escaped literals, so an offset inside
+    a marker is mapped to the exact character inside the ``{c:...}`` body.
+    """
+    def _raw_index_of_plain(body, q):
+        k = cnt = 0
+        while k < len(body) and cnt < q:
+            if body[k] == "\\" and k + 1 < len(body) and body[k + 1] in "{}":
+                k += 2
+            else:
+                k += 1
+            cnt += 1
+        return k
+
+    if not compound:
+        return 0
+    i = 0          # compound index
+    p = 0          # plain-VN index
+    n = len(compound)
+    while i < n:
+        c = compound[i]
+        if c == "\\" and i + 1 < n and compound[i + 1] in "{}":
+            if p >= offset:
+                return i
+            p += 1
+            i += 2
+            continue
+        if c == "\\" and i + 1 < n and compound[i + 1] == "\\":
+            if p >= offset:
+                return i
+            p += 1
+            i += 2
+            continue
+        if c == "{":
+            if compound.startswith("{p}", i):
+                i += 3
+                continue
+            m = HIGHLIGHT_RE.match(compound, i)
+            if m:
+                body = m.group(2)
+                inner = len(_unesc(body))
+                rel = offset - p          # plain char inside the phrase?
+                if 0 <= rel < inner:
+                    return i + 3 + _raw_index_of_plain(body, rel)
+                i += len(m.group(0))
+                p += inner
+                continue
+        if p >= offset:
+            return i
+        p += 1
+        i += 1
+    return i
+
+
 def build_compound(item, with_speaker=True):
     """Render an editable string: [Speaker] VN-with-markers.
 

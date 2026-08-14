@@ -286,6 +286,82 @@ class TimesPanel(Vertical):
 
     def on_mount(self) -> None:
         self.query_one("#times_off_0", Input).focus()
+        self.app_ref._schedule_sync_highlight()
+
+    def markers_from_inputs(self) -> list:
+        """Current ``(time, wait, start, end)`` from the offset inputs.
+
+        ``time``/``wait`` stay as the tuned reference; ``start`` is the live
+        input value (``end`` mirrors it, matching the saved ``[off, off]``).
+        """
+        out = []
+        for i, (time, wait, _start, _end) in enumerate(self.markers):
+            raw = self.query_one(f"#times_off_{i}", Input).value.strip()
+            off = int(raw) if raw.isdigit() else _start
+            out.append((time, wait, off, off))
+        return out
+
+    def focused_offset(self) -> int | None:
+        """Offset of the marker input currently focused (or ``None``)."""
+        f = self.screen.focused
+        if isinstance(f, Input) and f.id and f.id.startswith("times_off_"):
+            i = int(f.id.split("_")[-1])
+            return self.markers_from_inputs()[i][2]
+        return None
+
+    def _bump_offset(self, delta: int) -> None:
+        """Increment/decrement the focused marker's offset by ``delta``.
+
+        Runs at key-repeat speed with no artificial throttling; writing
+        ``input.value`` fires ``Input.Changed`` so the debounced highlight
+        follows on the next pause.
+        """
+        f = self.screen.focused
+        if not (isinstance(f, Input) and f.id and f.id.startswith("times_off_")):
+            return
+        item = self.app_ref.current_item
+        vn = item.vn if item is not None else ""
+        raw = f.value.strip()
+        off = int(raw) if raw.isdigit() else 1
+        new = max(1, min(off + delta, max(1, len(vn))))
+        if new != off:
+            f.value = str(new)
+
+    def key_up(self) -> None:
+        self._bump_offset(1)
+
+    def key_down(self) -> None:
+        self._bump_offset(-1)
+
+    @on(Input.Changed)
+    def _on_offset_change(self, event: Input.Changed) -> None:
+        if event.input.id and event.input.id.startswith("times_off_"):
+            self.app_ref._schedule_sync_highlight()
+
+    def reload(self) -> bool:
+        """Re-read markers for the current item; ``False`` if incompatible.
+
+        Called on item switch while the panel is open: the tuned snapshot may
+        change, so rebuild the inputs from it (same marker count) and refresh
+        the highlight. Returns ``False`` when the new item has no markers or a
+        different count, so the app can close the panel.
+        """
+        from tr_edit_core import tuned_times
+        item = self.app_ref.current_item
+        if item is None:
+            return False
+        base = item.file[:-len(".msg")]
+        rids = [r for r in item.ids if tuned_times(self.app_ref.store, base, r)]
+        if not rids or len(rids) != len(self.rids):
+            return False
+        new = list(tuned_times(self.app_ref.store, base, rids[0]))
+        if len(new) != len(self.markers):
+            return False
+        self.markers = new
+        for i, (time, wait, start, end) in enumerate(self.markers):
+            self.query_one(f"#times_off_{i}", Input).value = str(start)
+        self.app_ref._schedule_sync_highlight()
+        return True
 
     @on(Button.Pressed)
     def _on_button(self, event: Button.Pressed) -> None:
@@ -693,6 +769,7 @@ class TrEditApp(App):
         self._search_timer = None
         self._search_armed_query = ""
         self._skip_search_debounce = False
+        self._times_timer = None   # debounced live sync-highlight (F9 panel)
         self._skip_range_sync = False
         self._skip_filter_refresh = False
         self.range = None   # (start, end) inclusive, or None
@@ -951,6 +1028,80 @@ class TrEditApp(App):
         if self.current_item is not None:
             self._render_preview(self.current_item)
 
+    # -- live voice-sync highlight (F9 panel) ------------------------------
+
+    def _offset_to_location(self, text: str, idx: int) -> tuple[int, int]:
+        """Map a flat character index into ``text`` to a (row, col) location."""
+        idx = min(idx, len(text))
+        row = text.count("\n", 0, idx)
+        last_nl = text.rfind("\n", 0, idx)
+        return (row, idx - (last_nl + 1))
+
+    def _set_sync_highlight(self, off: int | None = None) -> None:
+        """Highlight the voice-sync pause char for ``off`` inside the editor.
+
+        The F9 panel edits ``times_`` offsets while the focus stays on the
+        panel; a TextArea selection still renders when the widget is not
+        focused, so the pause point is shown live in the editor. The pause
+        sits at ``off - 1`` (the first char of the next reveal segment is at
+        ``off``), walking back over trailing spaces like the preview tint.
+        """
+        from textual.document._document import Selection
+
+        from tr_edit_core import vn_index_to_compound
+        editor = self.query_one("#editor", TextArea)
+        empty = Selection((0, 0), (0, 0))
+        if off is None or self.current_item is None:
+            editor.selection = empty
+            return
+        vn = self.current_item.vn
+        j = min(off - 1, len(vn) - 1)
+        if j < 0:
+            editor.selection = empty
+            return
+        while j >= 0 and vn[j].isspace():
+            j -= 1
+        if j < 0:
+            editor.selection = empty
+            return
+        compound = editor.text
+        idx = vn_index_to_compound(compound, vn, j)
+        start = self._offset_to_location(compound, idx)
+        line = compound.split("\n")[start[0]]
+        end = (start[0], min(start[1] + 1, len(line)))
+        editor.selection = Selection(start, end)
+
+    def _clear_sync_highlight(self) -> None:
+        """Reset the editor selection to empty (close the F9 panel)."""
+        try:
+            self._set_sync_highlight(None)
+        except Exception:  # noqa: BLE001, S110 - editor may not exist yet
+            pass
+
+    def _schedule_sync_highlight(self) -> None:
+        """Debounce the live highlight recompute (mirrors the search box).
+
+        Each keystroke / arrow tap arms a short timer; the selection is
+        written only after the user pauses, so spamming Up/Down does not
+        rewrite the editor on every repeat.
+        """
+        if self._times_timer is not None:
+            self._times_timer.stop()
+        self._times_timer = self.set_timer(0.15, self._do_sync_highlight)
+
+    def _do_sync_highlight(self) -> None:
+        """Apply the highlight for the F9 marker currently focused (or clear)."""
+        self._times_timer = None
+        if self.current_item is None:
+            return
+        panel = self.query_one("#inline_panel", Vertical)
+        if "hidden" in panel.classes:
+            return
+        ts = next((c for c in panel.children if isinstance(c, TimesPanel)), None)
+        if ts is None:
+            return
+        self._set_sync_highlight(ts.focused_offset())
+
     def _append_times_preview(self, prev, item) -> None:
         """Append a ``times_`` voice-sync line to the preview (if any markers).
 
@@ -985,6 +1136,15 @@ class TrEditApp(App):
                     child.count()
                 except Exception:  # noqa: BLE001, S110 - keep the UI alive
                     pass
+            elif isinstance(child, TimesPanel):
+                # The tuned snapshot may differ for the new item; close the
+                # panel when it no longer applies (no markers / different
+                # count) rather than showing stale offsets.
+                try:
+                    if not child.reload():
+                        self.close_slot()
+                except Exception:  # noqa: BLE001 - keep the UI alive
+                    self.close_slot()
 
     def _rich_esc(self, s: str) -> str:
         """Escape rich-markup metacharacters in ``s`` for a Static.update.
@@ -1456,6 +1616,7 @@ class TrEditApp(App):
 
     def close_slot(self) -> None:
         """Hide the inline slot and bring the legend back."""
+        self._clear_sync_highlight()
         slot = self.query_one("#inline_panel", Vertical)
         slot.remove_children()
         slot.add_class("hidden")

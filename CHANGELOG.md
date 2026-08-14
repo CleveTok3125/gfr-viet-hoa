@@ -113,7 +113,14 @@
   edited by hand (e.g. when the automatic remap lands a sync point a word off).
   Saving writes the offsets to `tag_overrides.json` under the new `times_` key;
   `tag_tuning.write_to_game` stamps them onto the tuned tag tables at patch
-  time (overrides keep the marker's `time_`/`wait_` values).
+  time (overrides keep the marker's `time_`/`wait_` values). While the F9
+  panel is open, **↑/↓ nudge the focused marker's offset by one character at
+  full key-repeat speed** (no throttling), and the pause point is highlighted
+  live inside the editor — a debounced selection (same 0.15s debounce as the
+  search box) sits on the pause char so you can drag a sync point into place
+  visually without losing focus on the panel. The panel re-reads the tuned
+  snapshot when the item changes and closes itself if the new item no longer
+  has matching markers.
 - **Editor: pause-char tint.** The exact character where a `times_` marker
   pauses the reveal is tinted on both the VN and the EN+ preview, so a
   hand-fixed sync point is visually confirmed in place. Out-of-range markers
