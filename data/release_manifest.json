@@ -26,7 +26,7 @@
   "data/system/table/text/ko/text_story_tag.msg": "c106a2d88db4a3da338b7dca25800772",
   "data/system/table/text/ko/text_tutorial.msg": "52814aae49b774e50fe0757d2e8beb8a",
   "data/system/table/text/ko/text_tutorial_tag.msg": "947e77bae366b268cffd136d7b572679",
-  "data/system/table/text/ko/text_ui.msg": "c2128a5caf4bb458b17e03d8e6c34c3f",
+  "data/system/table/text/ko/text_ui.msg": "b4408020285a8e1c7e241b3352aa1030",
   "data/system/table/text/ko/text_ui_tag.msg": "badfbc497b82a054333f71739c4b30fb",
   "data/system/table/text/ko/text_uskill.msg": "ab7ced1d0d19fca777dfd1fdd415a465",
   "data/system/table/text/ko/text_uskill_tag.msg": "e7e0f6eef56921009d0d2f3f91202743",
@@ -131,7 +131,7 @@
   "data/system/table/scenario/ko/text_scenario_710.msg": "42ad436e2b5a77ef139f0d3480321c06",
   "data/system/table/scenario/ko/text_scenario_710_tag.msg": "b4e966722884e7c2c9a0f6aab07614a1",
   "data/system/table/scenario/ko/text_scenario_720.msg": "91410a828f8539a259f611fe3c816b63",
-  "data/system/table/scenario/ko/text_scenario_720_tag.msg": "2b7d74a2f1a77760f112516c213c26e2",
+  "data/system/table/scenario/ko/text_scenario_720_tag.msg": "44edc8c01e68300f251a87f6ea985e51",
   "data/system/table/scenario/ko/text_scenario_730.msg": "27e7a66b6cd9a5ee737b4efc4cf1d593",
   "data/system/table/scenario/ko/text_scenario_730_tag.msg": "5ae583d43923c9d62a9c3a12ae41c09f",
   "data/system/table/scenario/ko/text_scenario_740.msg": "f6735e0febe0ee728d0f53beedaf5d7f",
@@ -185,5 +185,5 @@
   "data/font/fttk_yoongothic750.msg": "8e5cd3f08671726c67c08f279cfc9dc5",
   "data/font/fttk_yoongothic750_1.wtb": "08a9f2c01a7999bfc0f6e5393397d16c"
  },
- "build_vh": "VH v2026.08.13.1742"
+ "build_vh": "VH v2026.08.14.1310"
 }

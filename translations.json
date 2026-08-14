@@ -4,7 +4,7 @@
   "format": 1,
   "description": "VI translation table keyed by stable row ids (id_hash_ or id_hash_::subid_hash_)",
   "build": "2.0.3",
-  "build_vh": "VH v2026.08.13.1742",
+  "build_vh": "VH v2026.08.14.1310",
   "build_fingerprint": {
    "system/table/text/en/text_ui.msg": "e43a7245ed8a5c522eae0229d416f5a8",
    "system/table/text/en/text.msg": "a1dd473218e0bcda003701b0e0038027"
@@ -18506,7 +18506,7 @@
    "TXT_NEWS_GUIDE_STORE": "Đến Cửa Hàng",
    "TXT_NEWS_TTL": "Tin tức",
    "TXT_SYS_TITLE_SAVE_CONVERT": "Chuyển Đổi Dữ Liệu Lưu",
-   "TXT_TITLE_VERSION": "Phiên bản {0} - VH v2026.08.13.1742",
+   "TXT_TITLE_VERSION": "Phiên bản {0} - VH v2026.08.14.1310",
    "TXT_HUD_AUTOSKIP": "Tự động bỏ qua",
    "TXT_SYS_TITLE_SLOT_AUTOSAVE": "Lưu tự động",
    "TXT_DLG_CONVERT_PROCESSING": "Đang chuyển đổi dữ liệu đã lưu.\nĐừng tắt nguồn.",

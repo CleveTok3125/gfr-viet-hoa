@@ -84,12 +84,12 @@ thành, để `-` cho mục chưa làm.
 
 | Chapter (EN)                     | Chương (VI)                            | Hội thoại  | Highlight  | Voice-sync (times_)  | Glossary (gần nhất)  | Đảm bảo chất lượng  |
 |--------------------------------- |--------------------------------------- |:---------: |:---------: |:-------------------: |:-------------------: |:------------------: |
-| `Into the Conflux`               | Vào Conflux                            |     x      |     x      |          x           |          x           |          x          |
-| `Echoes of Scorn`                | Những Tiếng Vọng Khinh Miệt            |     x      |     x      |          x           |          x           |          x          |
-| `A Trial of Two Eternities`      | Thử Thách Của Hai Cõi Vĩnh Hằng        |     x      |     x      |          x           |          x           |          x          |
-| `Ragnalia, the Heralds of Doom`  | Ragnalia, Sứ Giả Của Diệt Vong         |     x      |     x      |          x           |          x           |          x          |
-| `Becoming Fatebreakers`          | Trở Thành Kẻ Phá Số Mệnh               |     x      |     x      |          x           |          x           |          x          |
-| `Every End Has a Beginning`      | Mọi Kết Thúc Đều Có Khởi Đầu           |     x      |     x      |          x           |          x           |          x          |
+| `Into the Conflux`               | Vào Conflux                            |     x      |     x      |          x           |          x           |          -          |
+| `Echoes of Scorn`                | Những Tiếng Vọng Khinh Miệt            |     x      |     x      |          x           |          x           |          -          |
+| `A Trial of Two Eternities`      | Thử Thách Của Hai Cõi Vĩnh Hằng        |     x      |     x      |          x           |          x           |          -          |
+| `Ragnalia, the Heralds of Doom`  | Ragnalia, Sứ Giả Của Diệt Vong         |     x      |     x      |          x           |          x           |          -          |
+| `Becoming Fatebreakers`          | Trở Thành Kẻ Phá Số Mệnh               |     x      |     x      |          x           |          x           |          -          |
+| `Every End Has a Beginning`      | Mọi Kết Thúc Đều Có Khởi Đầu           |     x      |     x      |          x           |          x           |          -          |
 | `My Power Is Yours`              | Sức Mạnh Của Em Là Dành Cho Mọi Người  |     x      |     x      |          -           |          -           |          -          |
 | `Bursting with Power`            | Tràn Đầy Sức Mạnh                      |     x      |     x      |          -           |          -           |          -          |
 
