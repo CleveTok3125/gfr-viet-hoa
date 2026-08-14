@@ -140,8 +140,10 @@ automatically onto the three engine font slots. To rebuild or tweak it, see
 
 ## Disclaimer
 
-Fan-made localization. All game assets and trademarks belong to Cygames, Inc.
-This is a personal-usage mod.
+Fan-made localization. All game trademarks belong to Cygames, Inc. This is a
+personal-usage mod. The repository ships **no game assets or extracted game
+content** — the patch operates on your own installed copy at runtime. For the
+full copyright and license scope, see [`NOTICE`](NOTICE).
 
 **Requirements & legality.** This patch only works on a copy of the game you
 own. It does not bypass DRM, does not ship or extract any game assets into the
@@ -149,13 +151,14 @@ repository, and does not patch cracked/illegitimate copies: the build
 fingerprint check expects a genuine, unmodified English `data.i`, and the
 translation writes into your own loose table files.
 
-**Redistribution (GPL v3).** This project is licensed under the **GNU GPL
-v3** (see `LICENSE`). Redistributing or publishing this product in binary /
-release / artifact form (e.g. re-uploading a pre-built release zip, patched
-`.msg` tables, `data.i`, fonts or any other build artifact) on other platforms
-or websites is **strictly prohibited unless the complete corresponding source
-code and the license text are distributed alongside it**, as required by the
-GPL v3. Prefer linking to this repository so everyone always gets the source.
+**Redistribution (GPL v3).** The project's **source code** and the
+**file format, structure and tool-generated characteristics of the
+translation data** are licensed under the **GNU GPL v3** (see `LICENSE` and
+`NOTICE`). The translated content is not licensed, and the bundled fonts keep
+their OFL licenses. Pre-built release artifacts (patched `.msg` tables,
+`data.i`, fonts, release zips) are fan-mod outputs for personal use on your
+own copy and fall outside this project's license grant. Prefer linking to this
+repository so everyone always gets the source.
 
 **Translation quality.** Only the strings reported as *hand-edited* (see
 `TRANSLATION_NOTES.md` and the per-table progress marks) have been reviewed

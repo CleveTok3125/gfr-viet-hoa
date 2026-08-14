@@ -1,0 +1,32 @@
+Granblue Fantasy: Relink — Vietnamese Localization Patch
+========================================================
+
+A fan-made Vietnamese localization for Granblue Fantasy: Relink. Not
+affiliated with or endorsed by Cygames, Inc. All game trademarks belong to
+their respective owners.
+
+License scope
+-------------
+
+Source code (src/, apply.py, apply_diff.py, gfrpatch/, tools/, scripts/,
+verify.py, rebuild_translations.py, updater.py, fix_translations.py,
+update_filelist.py): original work of the project authors, licensed under the
+GNU General Public License v3 (see LICENSE).
+
+Translation data (translations.json, highlight_decisions.json,
+tag_overrides.json, tag_tuning.json): only the file format and structure, and
+the characteristics produced by the tooling, are licensed under the GPL v3.
+The translated strings are a community compilation and are not licensed by
+this project.
+
+Bundled fonts (data/fonts.zip, data/fonts_src/): built from open-license
+typefaces (Barlow Medium — SIL OFL 1.1; DejaVu Sans; Noto Sans CJK) and
+distributed under the OFL 1.1 (see data/fonts_src/OFL.txt,
+data/fonts_src/LICENSE-dejavu.txt, data/fonts_src/LICENSE-noto-cjk.txt).
+The build code is GPL v3; the font files contain no game assets.
+
+Third-party code (vendor/): keeps its upstream licenses; not part of this
+project's license grant.
+
+Repository contents: no game assets or extracted game content are shipped.
+The patch operates on the user's own installed copy at runtime.
