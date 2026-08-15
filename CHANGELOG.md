@@ -23,6 +23,12 @@
   `--id`, `--range` and `--speaker` join the existing `--file`, so a one-line
   command lands the item list directly on the rows you came to edit (the
   same filtering applies as if you had typed them).
+- **Editor: voice-sync status column.** The item table gains a `TS (VN)`
+  column next to EN showing the row's voice-sync state: `-` when the rid has
+  no `times_` markers in the tuned tables, `auto` when it has them but no
+  manual override yet (game default / auto pacing), and `edited` when a
+  hand-fix exists in `tag_overrides.json` (via the F9 panel). It works
+  without `--game` and refreshes right after an F9 save.
 
 ## v0.7.0 - EN redirect, voice-sync timing & Barlow font rebuild (2026-08-13)
 

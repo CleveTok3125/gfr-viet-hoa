@@ -80,6 +80,7 @@ from tr_edit_core import (
     iter_scan,
     matches,
     parse_compound,
+    times_state,
 )
 
 MAX_ROWS = 3000
@@ -889,6 +890,7 @@ class TrEditApp(App):
         table.add_column("ID", key="id", width=22)
         table.add_column("SPK", key="spk", width=14)
         table.add_column("EN", key="en")
+        table.add_column("TS (VN)", key="ts", width=8)
         # make the preview/legend scroll containers focusable so PageUp/
         # PageDown/arrows/mouse-wheel scroll them (they are by default)
         self.query_one("#preview_sc", ScrollableContainer).can_focus = True
@@ -984,9 +986,19 @@ class TrEditApp(App):
                     cell = Text("*", style="bold red") + cell
             else:
                 cell = ids or "-"
+            # voice-sync status (times_): '-' none, 'auto' default pacing,
+            # 'edited' hand-fixed via the F9 panel (override written).
+            ts = times_state(store, it.file[:-len(".msg")],
+                             it.ids[0] if it.ids else "")
+            if ts == "edited":
+                ts_cell = Text("edited", style="#4EBF71")
+            elif ts == "auto":
+                ts_cell = Text("auto", style="yellow")
+            else:
+                ts_cell = Text("-", style="dim")
             table.add_row(str(found_idx[i]), nid, cell,
                           (it.speaker or "")[:14] or "-",
-                          en_line, key=(it.file, it.key))
+                          en_line, ts_cell, key=(it.file, it.key))
         # selection: keep the current row while editing (dirty), else pick
         # first / preserved key. RowHighlighted does not re-fire after a
         # full repopulate, so select + load explicitly. Guard against the

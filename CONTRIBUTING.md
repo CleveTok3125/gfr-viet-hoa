@@ -305,6 +305,13 @@ EN/VN/ID, `*`/`?` wildcards), `--id <rid>` (ID box), `--range <lo-hi>` (index
 range, bare `100` or open-ended `100-` also work) and `--speaker <name>`.
 Any combination works; omitting an option leaves that box empty.
 
+The item table's last column, `TS (VN)`, reports the voice-sync status of the
+row's *Vietnamese* text (it sits next to EN so it is easy to glance while
+scanning): `-` means the rid carries no `times_` markers in the tuned tables,
+`auto` means it does but no manual override exists yet (the game default /
+auto-applied pacing is in effect), and `edited` means it was hand-fixed via
+the F9 sync panel and an override is stored in `tag_overrides.json`.
+
 | Key | Action |
 |-----|--------|
 | Up / Down (or j / k) | move between items |

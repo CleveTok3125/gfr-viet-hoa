@@ -721,6 +721,45 @@ def tuned_times(store, base, rid):
     return []
 
 
+def tuned_times_index(store):
+    """Return ``{base: {rid: True}}`` for every rid carrying ``times_`` markers.
+
+    Built once (cached on the store) from the tuned tables. ``times_`` is
+    rid-keyed, so a rid's subid splits share the same markers. The tuning is
+    immutable during a session, so the cache never needs invalidating; the
+    overrides side is read live by ``times_state``.
+    """
+    cache = getattr(store, "_times_index", None)
+    if cache is not None:
+        return cache
+    cache = {}
+    for base, entries in ((store.tuned or {}).get("files", {}) or {}).items():
+        idx = {}
+        for rec in entries.values():
+            rid = rec.get("id_")
+            if rid and rec.get("times_"):
+                idx[rid] = True
+        cache[base] = idx
+    store._times_index = cache
+    return cache
+
+
+def times_state(store, base, rid):
+    """Return the voice-sync (``times_``) state of one row id in a table.
+
+    ``"none"``   -> the rid has no ``times_`` markers in the tuned tables.
+    ``"auto"``   -> the rid has ``times_`` but no manual override yet (the
+                    game default / auto-applied pacing is in effect).
+    ``"edited"`` -> the rid has ``times_`` and a manual override exists in
+                    ``tag_overrides.json`` (hand-fixed via the F9 panel).
+    """
+    if not tuned_times_index(store).get(base, {}).get(rid):
+        return "none"
+    if (store.overrides or {}).get(base, {}).get(rid, {}).get("times_"):
+        return "edited"
+    return "auto"
+
+
 def _load_markers(store, file, ids, vn):
     """Merge highlight phrase markers + player position from decisions/overrides."""
     base = file[:-len(".msg")]
