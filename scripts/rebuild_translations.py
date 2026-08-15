@@ -10,7 +10,7 @@ VI) keep the most frequent VI and are reported for review.
 This guarantees translations.json reproduces exactly the installed patch.
 
 Usage:
-    python3 rebuild_translations.py --game <install> [--en-ref <dir>] [--out <file>]
+    python3 scripts/rebuild_translations.py --game <install> [--en-ref <dir>] [--out <file>]
 """
 import argparse
 import collections
@@ -19,7 +19,8 @@ import json
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
+sys.path.insert(0, os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 from common import bootstrap
 
 bootstrap()

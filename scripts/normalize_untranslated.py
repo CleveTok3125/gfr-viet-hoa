@@ -22,8 +22,8 @@ the local English snapshot data/._en_prev.json. Nothing is written unless
 --write is passed.
 
 Run from the repo root:
-    python3 normalize_untranslated.py            # dry-run report
-    python3 normalize_untranslated.py --write    # apply
+    python3 scripts/normalize_untranslated.py            # dry-run report
+    python3 scripts/normalize_untranslated.py --write    # apply
 """
 import argparse
 import json
@@ -31,7 +31,7 @@ import os
 import re
 import sys
 
-REPO = os.path.dirname(os.path.abspath(__file__))
+REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 for p in (REPO, os.path.join(REPO, "src"), os.path.join(REPO, "vendor")):
     if p not in sys.path:
         sys.path.insert(0, p)

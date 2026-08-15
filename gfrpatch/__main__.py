@@ -166,8 +166,8 @@ def main():
         print(f"Build check: OK (fingerprint match on {checked} source table(s))")
     else:
         print(f"Build check: WARNING - this install does not match the translation "
-              f"build ({len(mismatches)} fingerprint mismatch(es)); run updater.py "
-              "to refresh.")
+              f"build ({len(mismatches)} fingerprint mismatch(es)); run "
+              "scripts/updater.py to refresh.")
 
     trans = load_translations()["translations"]
     engine = PatchEngine(trans)

@@ -137,8 +137,8 @@ def main():
               f"translation build ({len(mismatches)} fingerprint mismatch(es)).")
         for path, exp, got in mismatches:
             print(f"    {path}: expected {exp[:12]}... got {got[:12]}...")
-        print("    Translations may be missing new strings. Run updater.py "
-              "against this build to refresh.")
+        print("    Translations may be missing new strings. Run "
+              "scripts/updater.py against this build to refresh.")
 
     filelist = load_filelist()
     overrides = {}

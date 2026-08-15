@@ -16,7 +16,8 @@ Matching strategy, per row of the newer build's English table:
 After a successful run the English snapshot is refreshed from the new build so
 the next run compares against the current English.
 
-The remapping core is ``remap_file``; tools such as ``updater.py`` reuse it.
+The remapping core is ``remap_file``; tools such as ``scripts/updater.py``
+reuse it.
 
 Usage:
     python3 src/remap_ids.py --game <install>

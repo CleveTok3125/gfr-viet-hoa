@@ -13,7 +13,7 @@ dropped: they produce no change when patched and would only reintroduce game
 text into the repository.
 
 Also writes data/._en_prev.json — a gitignored English snapshot
-(file -> key -> en) used later by updater.py for fuzzy remapping after a game
+(file -> key -> en) used later by scripts/updater.py for fuzzy remapping after a game
 update. It is never committed.
 
 Usage:

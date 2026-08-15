@@ -8,15 +8,16 @@ cannot work. The engine ids survive updates, so the row is located and
 the Vietnamese value written by id regardless of the on-disk language.
 
 Usage:
-    python3 apply_diff.py [--game <path>] [--skip-fix-sizes] [--no-backup]
+    python3 scripts/apply_diff.py [--game <path>] [--skip-fix-sizes] [--no-backup]
 """
 import argparse
 import os
 import shutil
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
 from common import bootstrap
 

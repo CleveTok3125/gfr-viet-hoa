@@ -15,7 +15,7 @@ Writes:
     review.txt              remapped / new rows that need a human look
 
 Usage:
-    python3 updater.py --game <new_install> [--out translations_new.json]
+    python3 scripts/updater.py --game <new_install> [--out translations_new.json]
         [--snapshot data/._en_prev.json] [--accept 0.90] [--dry-run]
 """
 import argparse
@@ -23,14 +23,15 @@ import json
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.insert(0, os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
 from common import bootstrap
 
 bootstrap()
 from common import repo_file
-from remap_ids import ACCEPT, DEFAULT_SNAPSHOT, REVIEW, remap_file
+from remap_ids import ACCEPT, DEFAULT_SNAPSHOT, remap_file
 
 
 def main():

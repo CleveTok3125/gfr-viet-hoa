@@ -14,7 +14,8 @@ import os
 import shutil
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
+sys.path.insert(0, os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 from common import bootstrap
 
 bootstrap()

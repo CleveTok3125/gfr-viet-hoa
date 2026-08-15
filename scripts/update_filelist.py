@@ -6,7 +6,7 @@ maintained upstream by the GBFRDataTools project at
 https://github.com/Nenkai/GBFRDataTools.
 
 Usage:
-    python3 update_filelist.py [--out <file.gz>] [--url <url>]
+    python3 scripts/update_filelist.py [--out <file.gz>] [--url <url>]
 """
 import argparse
 import gzip
@@ -20,7 +20,8 @@ DEFAULT_URL = ("https://raw.githubusercontent.com/Nenkai/GBFRDataTools/"
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--out", default=os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "data", "filelist.txt.gz"))
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "data", "filelist.txt.gz"))
     ap.add_argument("--url", default=DEFAULT_URL)
     args = ap.parse_args()
 

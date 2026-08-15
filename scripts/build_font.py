@@ -20,7 +20,7 @@ Each page is written as <out>/<base>_<n>.wtb (n = page index + 1) and the msg
 pages entries point at <base><n> to match the data/fonts.zip install layout.
 
 Usage:
-    python3 -m src.build_font --font data/fonts_src/Barlow-Medium.ttf \
+    python3 scripts/build_font.py --font data/fonts_src/Barlow-Medium.ttf \
         --out build/font --name fttk_yoongothic750 --size 38 --padding 6
 
 References: Nenkai/GBFRDataTools TextureBinHeader/TextureBin (WTB container),
