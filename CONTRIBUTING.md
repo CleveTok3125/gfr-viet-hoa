@@ -305,7 +305,7 @@ markers (conventions below). Saving (Ctrl+S) writes back to `translations.json`,
 | Ctrl+R | discard the current edit, reload from the saved state |
 | Ctrl+F | focus search (EN/VN/ID, case-insensitive, debounced, `*`/`?` wildcards; `\n` is treated as a space so a query typed with spaces matches text split across line breaks) |
 | Ctrl+L | focus the file filter (empty = browse all tables); Tab moves the focus across all five filter boxes (search, range, file, ID, Speaker) |
-| index-range filter | sits next to the file filter (e.g. `100-120`, bare `100`, or open-ended `100-`); when it holds a range only those rows are listed, and the index column `N` shows the item's position in that table's enumeration |
+| index-range filter | sits next to the file filter (e.g. `100-120`, bare `100`, or open-ended `100-`); when it holds a range only those rows are listed, and the index column `N` shows the item's position in its *own* table's enumeration — stable across the file filter and search, so F8 reports the same number that is on screen |
 | ID / Speaker filter | typing keeps only rows whose row id / speaker matches (bar reads search - range - file - ID - Speaker, left to right); these boxes auto-complete — press Right at the end of the line to accept the suggested value (Tab moves focus) |
 | Ctrl+N | next table file |
 | Esc | back to the item list |
@@ -333,6 +333,22 @@ The preview panel highlights the current search query inside the plain VN text
 (reverse video), shows the original Japanese (`JA (raw)`) below it for
 kanji-exact reference, and the legend explains every marker. Both panels scroll
 independently.
+
+Duplicate rows are edited as one unit. Rows in the same table whose English
+text matches *exactly* (1-1) **and** carry identical source tag/times data are
+grouped; grouping reads the EN text from the game install, so grouping
+only happens when the editor runs with `--game`. A group member's ID is tinted
+cyan in the item table, with a red `*` prefix while its authored state (VN +
+highlight decisions + overrides incl. `{p}` and `times_`) still differs from
+the canonical member. Hovering or focusing such a row appends a
+`Duplicates (N)` section to the preview — one aligned line per member:
+`✓/–  [↑][◎]  #index  ID  name  file`, where `✓` means the member is fully in
+sync with the canonical member, `↑` marks the canonical (whose VN the editor
+always shows) and `◎` the row under the cursor. Ctrl+S writes the edited VN +
+highlight markers to every member at once and unifies `times_` when a member
+carries a manual voice-sync override; the F9 panel likewise stamps the whole
+group's rids, so saving a group leaves every member identical. A `⚠` warning
+line appears while the members' translations differ (saving will unify them).
 
 Marker conventions (self-defined; `tag_tuning.json` is intentionally left
 untouched):

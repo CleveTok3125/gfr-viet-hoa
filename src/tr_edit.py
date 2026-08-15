@@ -39,10 +39,13 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
 sys.path.insert(0, os.path.join(_HERE, ".."))
 
+from rich.cells import cell_len
+from rich.text import Text
 from textual import on
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, ScrollableContainer, Vertical
+from textual.message import Message
 from textual.suggester import Suggester
 from textual.widgets import (
     Button,
@@ -68,7 +71,12 @@ from tr_edit_core import (
     ScanItem,
     Store,
     apply_edit,
+    apply_group_edit,
+    authored_signature,
     build_compound,
+    canonical_member,
+    duplicate_groups,
+    group_for,
     iter_scan,
     matches,
     parse_compound,
@@ -117,6 +125,29 @@ LEGEND = (
     "F3        auto-wrap current text to the EN wrap width\n"
     "          (joins all lines, re-wraps; markers never split)"
 )
+
+
+class ItemTable(DataTable):
+    """DataTable that reports the row currently under the mouse pointer.
+
+    Posts ``HoverRow(row_index)`` when the hovered row changes and
+    ``HoverRow(None)`` when the mouse leaves the table, so the app can show a
+    transient full-info preview without disturbing the editor.
+    """
+
+    class HoverRow(Message):
+        def __init__(self, row: int | None) -> None:
+            super().__init__()
+            self.row = row
+
+    def watch_hover_coordinate(self, old, value) -> None:
+        super().watch_hover_coordinate(old, value)
+        row = value.row if 0 <= value.row < self.row_count else None
+        self.post_message(self.HoverRow(row))
+
+    def _on_leave(self, _) -> None:
+        super()._on_leave(_)
+        self.post_message(self.HoverRow(None))
 
 
 class ReplacePanel(Vertical):
@@ -319,8 +350,10 @@ class TimesPanel(Vertical):
         f = self.screen.focused
         if not (isinstance(f, Input) and f.id and f.id.startswith("times_off_")):
             return
-        item = self.app_ref.current_item
-        vn = item.vn if item is not None else ""
+        app = self.app_ref
+        # clamp against the VN actually shown in the editor (the group's
+        # canonical text, which may differ from current_item.vn)
+        vn = parse_compound(app.query_one("#editor", TextArea).text)[1]
         raw = f.value.strip()
         off = int(raw) if raw.isdigit() else 1
         new = max(1, min(off + delta, max(1, len(vn))))
@@ -343,24 +376,41 @@ class TimesPanel(Vertical):
 
         Called on item switch while the panel is open: the tuned snapshot may
         change, so rebuild the inputs from it (same marker count) and refresh
-        the highlight. Returns ``False`` when the new item has no markers or a
-        different count, so the app can close the panel.
+        the highlight. Mirrors :meth:`TrEditApp.action_open_times` so a
+        duplicate group keeps its union of rids and the canonical markers.
+        Returns ``False`` when the new item has no markers or a different
+        count, so the app can close the panel.
         """
         from tr_edit_core import tuned_times
-        item = self.app_ref.current_item
+        app = self.app_ref
+        item = app.current_item
         if item is None:
             return False
         base = item.file[:-len(".msg")]
-        rids = [r for r in item.ids if tuned_times(self.app_ref.store, base, r)]
-        if not rids or len(rids) != len(self.rids):
+        group = app.dup_group
+        if group and len(group) > 1:
+            rids = []
+            for m in group:
+                for r in m.ids:
+                    if r not in rids and tuned_times(app.store, base, r):
+                        rids.append(r)
+            if not rids or len(rids) != len(self.rids):
+                return False
+            canon = canonical_member(group).materialize(app.store)
+            c_rids = [r for r in canon.ids
+                      if tuned_times(app.store, base, r)]
+        else:
+            rids = [r for r in item.ids if tuned_times(app.store, base, r)]
+            c_rids = rids
+        if not rids or len(rids) != len(self.rids) or not c_rids:
             return False
-        new = list(tuned_times(self.app_ref.store, base, rids[0]))
+        new = list(tuned_times(app.store, base, c_rids[0]))
         if len(new) != len(self.markers):
             return False
         self.markers = new
         for i, (time, wait, start, end) in enumerate(self.markers):
             self.query_one(f"#times_off_{i}", Input).value = str(start)
-        self.app_ref._schedule_sync_highlight()
+        app._schedule_sync_highlight()
         return True
 
     @on(Button.Pressed)
@@ -389,11 +439,14 @@ class TimesPanel(Vertical):
             ov = app.store.overrides.setdefault(base, {}).setdefault(rid, {})
             ov["times_"] = out
         app.store.save_all()
+        app._dup_sync = None  # times_ overrides changed -> re-derive the checks
         self.notify(f"Saved {len(out)} voice-sync marker(s) - rebuild the "
                     "patch for the game to pick them up")
         app.close_slot()
         if app.current_item is not None:
-            app._refresh_preview()
+            # refresh the list too, so the red * / checks reflect the saved
+            # times_ (refreshing reloads the current row + preview as well)
+            app.refresh_table()
 
 
 class SlotMenu(Vertical):
@@ -777,6 +830,9 @@ class TrEditApp(App):
         self.items_idx = []        # enumeration index per self.items entry
         self.current_key = None    # (file, en) currently in the editor
         self.current_item = None   # Item currently in the editor
+        self.dup_group = None      # duplicate group of the current item (or None)
+        self._dup_sync = None      # cached {(file, key): synced} for group members
+        self._hover_key = None     # (file, key) of the row under the mouse
         self.dirty = False
         self._loaded = None        # last programmatic editor text
         self._suppress_highlight = False  # set during refresh's own selection
@@ -810,7 +866,7 @@ class TrEditApp(App):
                         with Vertical(id="inline_panel", classes="hidden"):
                             pass
                 with Vertical(classes="pane"):
-                    yield DataTable(id="table", zebra_stripes=True,
+                    yield ItemTable(id="table", zebra_stripes=True,
                                     cursor_type="row")
                     yield Static("", id="editor_head")
                     yield TextArea(id="editor")
@@ -832,6 +888,26 @@ class TrEditApp(App):
 
     # -- table population --------------------------------------------------
 
+    def _dup_sync_map(self) -> dict:
+        """Cached ``{(file, key): synced}`` for every duplicate-group member.
+
+        ``synced`` means the member's authored state (translation + highlight
+        decisions + overrides incl. ``{p}`` and ``times_``) equals the
+        canonical member's. The group index is cached on the store; this map is
+        invalidated whenever a save writes the store (see ``action_save_edit``
+        and ``TimesPanel._save``).
+        """
+        if self._dup_sync is None:
+            sync = {}
+            for members in duplicate_groups(self.store).values():
+                canon = canonical_member(members)
+                canon_sig = authored_signature(self.store, canon)
+                for m in members:
+                    sync[(m.file, m.key)] = (
+                        authored_signature(self.store, m) == canon_sig)
+            self._dup_sync = sync
+        return self._dup_sync
+
     def refresh_table(self, keep_key=None) -> None:
         store, base = self.store, self.base
         q = self.query_one("#search", Input).value.strip()
@@ -841,28 +917,35 @@ class TrEditApp(App):
         lo, hi = self.range if self.range is not None else (None, None)
         found = []
         found_idx = []
-        idx = 0
-        for it in iter_scan(store, bases=bases):
-            # The range filters on the item's position in this table's (or the
-            # whole-database) enumeration, stable regardless of the search
-            # query, so view_context can compute it once and expand outwards.
-            if lo is not None and idx < lo:
-                idx += 1
+        # The N column (and the range box) use the row's position inside its
+        # own table, so the number is stable across the file filter and search,
+        # and view_context (F8) reports the same index the user sees.
+        tables = store.tables
+        for file, table in tables.items():
+            if bases is not None and file[:-len(".msg")] not in bases:
                 continue
-            if hi is not None and idx > hi:
-                break
-            if q and not matches(store, it, q):
+            idx = 0
+            for key, vn in table.items():
+                if lo is not None and idx < lo:
+                    idx += 1
+                    continue
+                if hi is not None and idx > hi:
+                    break
+                it = ScanItem(store, file, key, vn)
+                if q and not matches(store, it, q):
+                    idx += 1
+                    continue
+                if q_id and not any(q_id in rid.lower() for rid in it.ids):
+                    idx += 1
+                    continue
+                if q_sp and q_sp not in (it.speaker or "").lower():
+                    idx += 1
+                    continue
+                found.append(it)
+                found_idx.append(idx)
                 idx += 1
-                continue
-            if q_id and not any(q_id in rid.lower() for rid in it.ids):
-                idx += 1
-                continue
-            if q_sp and q_sp not in (it.speaker or "").lower():
-                idx += 1
-                continue
-            found.append(it)
-            found_idx.append(idx)
-            idx += 1
+                if len(found) >= MAX_ROWS:
+                    break
             if len(found) >= MAX_ROWS:
                 break
         table = self.query_one("#table", DataTable)
@@ -870,6 +953,7 @@ class TrEditApp(App):
         self.items = found
         self.items_idx = found_idx
         self.rows_by_key = {it.file + "\u0000" + it.key: it for it in found}
+        dup_sync = self._dup_sync_map()
         for i, it in enumerate(found):
             ids = ",".join(it.ids[:2])
             if len(it.ids) > 2:
@@ -880,7 +964,18 @@ class TrEditApp(App):
             nid = it.file[:-len(".msg")]
             if len(nid) > 18:
                 nid = nid[:17] + "…"
-            table.add_row(str(found_idx[i]), nid, ids or "-",
+            dup_key = (it.file, it.key)
+            if dup_key in dup_sync:
+                # a duplicate-group member: tint its ID cyan and prefix a red *
+                # when its authored state still differs from the canonical
+                # member (the check in the preview also reads this); the full
+                # group info shows on hover/focus.
+                cell = Text(ids or "-", style="cyan")
+                if not dup_sync[dup_key]:
+                    cell = Text("*", style="bold red") + cell
+            else:
+                cell = ids or "-"
+            table.add_row(str(found_idx[i]), nid, cell,
                           (it.speaker or "")[:14] or "-",
                           en_line, key=(it.file, it.key))
         # selection: keep the current row while editing (dirty), else pick
@@ -974,16 +1069,49 @@ class TrEditApp(App):
             return
         self.load_item(item)
 
+    @on(ItemTable.HoverRow)
+    def on_hover_row(self, event) -> None:
+        """Transient full-info preview of the row under the mouse pointer.
+
+        Only the preview panel is touched (the editor / current_item stay put);
+        leaving the table restores the loaded item's preview.
+        """
+        table = self.query_one("#table", DataTable)
+        if event.row is None or event.row < 0 or event.row >= table.row_count:
+            if self.current_item is not None:
+                self._hover_key = None
+                self._render_preview(self.current_item)
+            return
+        key = table.get_row_at(event.row)
+        if key is None:
+            return
+        item = self.rows_by_key.get(key[0] + "\u0000" + key[1])
+        if item is None:
+            return
+        self._hover_key = (key[0], key[1])
+        self._render_preview(item)
+
     def load_item(self, item) -> None:
         item = self._full_item(item)
         self.current_key = (item.file, item.key)
         self.current_item = item
+        self.dup_group = group_for(self.store, item)
+        group = self.dup_group
+        if group and len(group) > 1:
+            # unified group editing: the editor always shows the group's shared
+            # VN (canonical member), while current_key/item stay anchored to
+            # the opened row so navigation/save target it.
+            show = canonical_member(group).materialize(self.store)
+        else:
+            show = item
         self._render_preview(item)
         spk = item.speaker or "(none)"
+        badge = (f"   [b]{len(group)} dupes[/b]"
+                 if group and len(group) > 1 else "")
         self.query_one("#editor_head", Static).update(
-            f"[b]Speaker:[/b] {spk}   [b](read-only, not counted)[/b]")
+            f"[b]Speaker:[/b] {spk}   [b](read-only, not counted)[/b]{badge}")
         editor = self.query_one("#editor", TextArea)
-        editor.text = build_compound(item, with_speaker=False)
+        editor.text = build_compound(show, with_speaker=False)
         # remember the programmatic value so TextArea.Changed fired for this
         # load is not mistaken for a user edit (the event is async)
         self._loaded = editor.text
@@ -1001,9 +1129,15 @@ class TrEditApp(App):
     def _render_preview(self, item) -> None:
         ids = ", ".join(item.ids) or "(no id)"
         from tr_edit_core import en_compound, tuned_times
+        group = group_for(self.store, item)
+        if group and len(group) > 1:
+            # the group's shared VN + sync data come from the canonical member
+            view = canonical_member(group).materialize(self.store)
+        else:
+            view = item
         base = item.file[:-len(".msg")]
         sync_offs = []
-        for rid in item.ids:
+        for rid in view.ids:
             for _t, _w, s, e in tuned_times(self.store, base, rid):
                 sync_offs.append(s)
                 if e != s:
@@ -1011,17 +1145,59 @@ class TrEditApp(App):
             if sync_offs:
                 break
         if self._en_markers:
-            en_view = self._highlight_en(en_compound(self.store, item),
-                                         item.file, item.ids)
+            en_view = self._highlight_en(en_compound(self.store, view),
+                                         view.file, view.ids)
         else:
             en_view = self._rich_esc(item.en)
         prev = (f"[b]{item.file}[/b]  {ids}\n"
                 f"[b]EN{'+' if self._en_markers else ''}:[/b]\n{en_view}\n"
-                f"[b]VN (plain):[/b]\n{self._highlight_vn(item.vn, sync_offs)}\n"
+                f"[b]VN (plain):[/b]\n{self._highlight_vn(view.vn, sync_offs)}\n"
                 f"[b]JA (raw):[/b]\n{self._rich_esc(self.store.ja_text(item.file, item.ids) or '(no JA)')}")
-        prev = self._append_times_preview(prev, item)
+        prev = self._append_times_preview(prev, view)
+        prev = self._append_dup_section(prev, group, item)
         self.query_one("#preview", Static).update(prev)
         self._remeasure_panel("preview_sc")
+
+    def _append_dup_section(self, prev, group, current) -> str:
+        """Append the full duplicate-group info to a preview string.
+
+        One line per member: ``✓/–  [↑][◎]  #index  ID  name  file`` — the
+        leading check marks a member whose full authored state (translation,
+        highlight decisions and overrides incl. ``{p}`` and ``times_``)
+        equals the canonical member's, ``–`` when any of it differs (a save or
+        voice-sync stamp will change it), ``↑`` the canonical member whose VN
+        is shown and ``◎`` the row under the cursor, all aligned before the
+        index. A warning notes when the translations differ.
+        """
+        if not group or len(group) < 2:
+            return prev
+        canon = canonical_member(group)
+        cur_key = (current.file, current.key)
+        canon_key = (canon.file, canon.key)
+        lines = [f"\n[b]Duplicates ({len(group)}):[/b]"]
+        live_vn = {(self.store.tables.get(m.file, {}) or {}).get(m.key, "")
+                   for m in group}
+        if len(live_vn) > 1:
+            lines.append(
+                "[dim]⚠ members have different translations — Ctrl+S will unify[/dim]")
+        canon_sig = authored_signature(self.store, canon)
+        for m in group:
+            # ✓ when the member's full authored state (translation + highlight
+            # decisions + overrides incl. {p} and times_) equals the canonical
+            # member's; – when any of it differs, so Ctrl+S / the voice-sync
+            # panel will write something for it.
+            status = "✓" if authored_signature(self.store, m) == canon_sig else "–"
+            mark = ""
+            if (m.file, m.key) == canon_key:
+                mark += "↑"
+            if (m.file, m.key) == cur_key:
+                mark += "◎"
+            pad = " " * max(0, 3 - cell_len(mark))
+            row = (f"  {status}  {mark}{pad}  #{m.idx_file}  "
+                   f"{m.ids[0] if m.ids else '-'}  "
+                   f"{(m.speaker or '-')}  {m.file}")
+            lines.append(row)
+        return prev + "\n" + "\n".join(lines)
 
     def _refresh_preview(self) -> None:
         """Re-render only the preview for the current item (no editor reset)."""
@@ -1054,7 +1230,9 @@ class TrEditApp(App):
         if off is None or self.current_item is None:
             editor.selection = empty
             return
-        vn = self.current_item.vn
+        # the displayed VN (group mode shows the canonical text, which may
+        # differ from current_item.vn when the opened row is not canonical)
+        vn = parse_compound(editor.text)[1]
         j = min(off - 1, len(vn) - 1)
         if j < 0:
             editor.selection = empty
@@ -1317,17 +1495,27 @@ class TrEditApp(App):
                                     + self.current_key[1])
         if item is None:
             return
-        item = self._full_item(item)
-        warnings = apply_edit(self.store, item, compound)
+        group = self.dup_group
+        if group and len(group) > 1:
+            warnings = apply_group_edit(self.store, group, compound)
+            n = len(group)
+        else:
+            item = self._full_item(item)
+            warnings = apply_edit(self.store, item, compound)
+            n = 1
         self.store.save_all()
         self.dirty = False
-        self.load_item(item)
+        self._dup_sync = None  # authored state changed -> re-derive the checks
+        # rebuild the list + cells (drops the red * from rows now in sync with
+        # canon) and re-load the current row with its freshly saved state
+        self.refresh_table()
         self.set_hint()
+        suffix = f" (applied to {n} duplicates)" if n > 1 else ""
         if warnings:
             self.notify("Saved with warnings:\n" + "\n".join(warnings),
                         severity="warning", timeout=6)
         else:
-            self.notify("Saved to translations/decisions/overrides")
+            self.notify("Saved to translations/decisions/overrides" + suffix)
 
     def action_reset_edit(self) -> None:
         if not self.current_key:
@@ -1338,7 +1526,12 @@ class TrEditApp(App):
             return
         item = self._full_item(item)
         editor = self.query_one("#editor", TextArea)
-        editor.text = build_compound(item, with_speaker=False)
+        group = self.dup_group
+        if group and len(group) > 1:
+            show = canonical_member(group).materialize(self.store)
+        else:
+            show = item
+        editor.text = build_compound(show, with_speaker=False)
         self._loaded = editor.text
         self.dirty = False
         self.update_editor_stats()
@@ -1627,18 +1820,35 @@ class TrEditApp(App):
         self.open_slot(ReplacePanel(self))
 
     def action_open_times(self) -> None:
-        """Open the voice-sync (times_) editor for the current item."""
+        """Open the voice-sync (times_) editor for the current item.
+
+        In a duplicate group the panel edits the group's shared voice-sync
+        state: markers come from the canonical member and saving stamps every
+        group member's times-bearing rids.
+        """
         item = self.current_item
         if item is None:
             self.notify("No item open", severity="warning")
             return
         from tr_edit_core import tuned_times
         base = item.file[:-len(".msg")]
-        rids = [r for r in item.ids if tuned_times(self.store, base, r)]
-        if not rids:
+        group = self.dup_group
+        if group and len(group) > 1:
+            rids = []
+            for m in group:
+                for r in m.ids:
+                    if r not in rids and tuned_times(self.store, base, r):
+                        rids.append(r)
+            canon = canonical_member(group).materialize(self.store)
+            c_rids = [r for r in canon.ids
+                      if tuned_times(self.store, base, r)]
+        else:
+            rids = [r for r in item.ids if tuned_times(self.store, base, r)]
+            c_rids = rids
+        if not rids or not c_rids:
             self.notify("This item has no voice-sync markers", severity="warning")
             return
-        markers = tuned_times(self.store, base, rids[0])
+        markers = tuned_times(self.store, base, c_rids[0])
         self.open_slot(TimesPanel(self, markers, rids))
 
     def action_apply_replace(self) -> None:

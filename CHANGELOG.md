@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.8.0 - editor unified duplicate-row editing (2026-08-15)
+
+- **Editor: unified duplicate-row editing.** Rows in the same table whose
+  English text (exact 1-1) *and* source tag/times data match are grouped. A
+  group member's ID is tinted cyan in the item table, with a red `*` prefix
+  while its authored state still differs from the canonical member; hovering
+  or focusing such a row shows the full group info in the preview, one
+  aligned line per member: `✓/–  [↑][◎]  #index  ID  name  file`, where `✓`
+  means the member's whole authored state (translation + highlight decisions
+  + overrides incl. `{p}` and `times_`) equals the canonical member's, `↑`
+  marks the canonical (whose VN the editor shows) and `◎` the row under the
+  cursor. The editor always displays the group's shared VN, and Ctrl+S
+  writes the edited VN + highlight markers to every member at once (and
+  unifies `times_` when a member carries a manual voice-sync override); the
+  F9 voice-sync panel edits the group's shared `times_` state and stamps
+  every member's rids. A warning line flags groups whose members differ
+  (saving will unify them). Grouping reads the English text from the game
+  install, so it only applies when the editor runs with `--game`.
+
 ## v0.7.0 - EN redirect, voice-sync timing & Barlow font rebuild (2026-08-13)
 
 - **Korean slot redirects to English first.** The patch copies the game's own
@@ -132,6 +151,10 @@
   counts, with the editor stats on a dedicated line (auto-grown so the second
   line is never clipped). The counter maps the plain-VN index, skipping inline
   markers.
+- **Editor: item index is per-table.** The N column and the range box now
+  always show the row's position inside its own table, no matter how many
+  files are listed, so a search result no longer shows a huge cross-database
+  number and F8 (view context) reports the same index that is on screen.
 - **Editor: shell-style autocomplete.** The file, ID and speaker filter boxes
   offer a tab-completable suggestion (Right accepts), sourced from the loaded
   table names / row ids / speaker set.

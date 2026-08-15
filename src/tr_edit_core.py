@@ -364,6 +364,201 @@ def iter_scan(store, bases=None):
             yield ScanItem(store, file, key, vn)
 
 
+# --------------------------------------------------------------------------
+# Duplicate groups (same file, exact EN, same source tag/times)
+# --------------------------------------------------------------------------
+
+
+class GroupMember:
+    """One row of a duplicate group (same file, EN + source tag/times).
+
+    Lightweight like :class:`ScanItem`; promoted to a full :class:`Item`
+    (markers loaded) only when actually edited via :meth:`materialize`.
+    ``idx_file`` is the row's enumeration index inside its own table (the N
+    column when the file filter is active); ``idx_global`` is the enumeration
+    index over all tables (the N column in the all-files view).
+    """
+
+    __slots__ = (
+        "en",
+        "file",
+        "ids",
+        "idx_file",
+        "idx_global",
+        "key",
+        "speaker",
+        "subid",
+        "vn",
+    )
+
+    def __init__(self, store, file, key, vn, idx_file, idx_global):
+        self.file = file
+        self.key = key
+        self.vn = vn
+        self.idx_file = idx_file
+        self.idx_global = idx_global
+        rid, self.subid = split_key(key)
+        self.ids = [rid] if rid else []
+        self.en = store.id_text_map(file).get(key, "")
+        self.speaker = store.speaker_label(self.ids)
+
+    def materialize(self, store):
+        """Promote to a full :class:`Item` (loads markers for one row)."""
+        return Item(store, self.file, self.key, self.vn)
+
+
+def _member_signature(store, member):
+    """``(file, en, tag_sig, times_sig)`` used as the duplicate-group key.
+
+    ``tag_sig`` is the EN-source highlight/name spans (``en_tag_spans``) merged
+    over the member's rids; ``times_sig`` the EN-source ``times_`` offsets. Both
+    come from the game install, so rows that are only *visually* the same text
+    but carry different tag/times data at the source stay separate.
+    """
+    spans = store.en_tag_spans(member.file)
+    tag_sig = []
+    for rid in member.ids:
+        rec = spans.get((rid, ""))
+        if not rec:
+            continue
+        for key in HIGHLIGHT_KEYS + ("names_",):
+            items = rec.get(key)
+            if items:
+                tag_sig.append((key, tuple(sorted(items))))
+    tag_sig = tuple(sorted(tag_sig))
+    times_sig = tuple(sorted(store.en_times_offsets(member.file, member.ids)))
+    return (member.file, member.en, tag_sig, times_sig)
+
+
+def authored_signature(store, member):
+    """The authored state of one row: translation + decisions + overrides.
+
+    Mirrors :func:`_member_signature` (which compares the EN-source data) but
+    on the *authored* side, so a ``✓`` in the duplicate list means the member
+    is fully in sync with the canonical member — a group save or voice-sync
+    stamp would write nothing new for it. ``times_`` overrides are included
+    because the voice-sync panel targets the whole group. Each record is
+    canonicalised with sorted-key JSON, so the comparison is exact and stable.
+    """
+    base = member.file[:-len(".msg")]
+    # Read the live translation (not the possibly-stale ``member.vn`` cached in
+    # the group index), so the check reflects the last save immediately.
+    vn = (store.tables.get(member.file, {}) or {}).get(member.key, "")
+    dec = json.dumps(
+        [(store.decisions or {}).get(base, {}).get(rid, {})
+         for rid in member.ids],
+        sort_keys=True, ensure_ascii=False)
+    ov = json.dumps(
+        [(store.overrides or {}).get(base, {}).get(rid, {})
+         for rid in member.ids],
+        sort_keys=True, ensure_ascii=False)
+    return (vn, dec, ov)
+
+
+def duplicate_groups(store):
+    """Index duplicate rows: same file, exact EN, same source tag/times.
+
+    Returns ``{signature: [GroupMember, ...]}`` for groups with >= 2 members.
+    EN text and the source spans are read from the game install, so without a
+    game dir the result is empty. Cached on the store for the session (the EN /
+    tag / times data never change while the editor is running).
+    """
+    cache = getattr(store, "_dup_groups", None)
+    if cache is not None:
+        return cache
+    groups = {}
+    if store.game:
+        idx_global = 0
+        for file, table in store.tables.items():
+            idx_file = 0
+            for key, vn in table.items():
+                member = GroupMember(store, file, key, vn,
+                                     idx_file, idx_global)
+                idx_file += 1
+                idx_global += 1
+                if not member.en:
+                    continue
+                sig = _member_signature(store, member)
+                groups.setdefault(sig, []).append(member)
+    result = {sig: members for sig, members in groups.items()
+              if len(members) >= 2}
+    store._dup_groups = result
+    return result
+
+
+def group_for(store, item):
+    """Return the duplicate group (list of :class:`GroupMember`) for ``item``.
+
+    Accepts a full :class:`Item` or a light :class:`ScanItem`/``GroupMember``
+    (only ``file``/``key``/``vn`` are read). Returns ``None`` when the row is
+    not a member of any group.
+    """
+    groups = duplicate_groups(store)
+    if not groups:
+        return None
+    member = GroupMember(store, item.file, item.key, item.vn, 0, 0)
+    return groups.get(_member_signature(store, member))
+
+
+def canonical_member(group):
+    """First member with a non-empty translation (else the first member).
+
+    The canonical member carries the group's shared VN and its markers are the
+    ones shown/edited in the editor; the order follows the row's index in the
+    file.
+    """
+    for m in group:
+        if m.vn:
+            return m
+    return group[0]
+
+
+def apply_group_edit(store, group, compound):
+    """Persist an edited compound string to every member of a duplicate group.
+
+    Reuses :func:`apply_edit` per member, so the translations, highlight
+    decisions and overrides (incl. the ``{p}`` player marker) are written for
+    each member's own file/key/rids. When any member carries a manual
+    ``times_`` override, the group's shared voice-sync state (the merged
+    ``times_`` of the first such member) is stamped onto every member so a
+    save fully unifies the group; if none has one, ``times_`` is left alone
+    (the game default already compares equal everywhere). Returns the
+    aggregated warnings.
+
+    Each member's ``vn`` is refreshed from the write so the group index stays
+    live: otherwise ``canonical_member``/the duplicate ``✓`` would keep using
+    the stale translation captured when the group was first built.
+    """
+    warnings = []
+    # find the member whose times_ override defines the group's shared voice
+    # sync, before apply_edit (which never touches times_) rewrites the row
+    shared = None
+    for m in group:
+        if not m.ids:
+            continue
+        rec = (store.overrides or {}).get(
+            m.file[:-len(".msg")], {}).get(m.ids[0], {})
+        if rec.get("times_"):
+            shared = m
+            break
+    for m in group:
+        item = m.materialize(store)
+        warnings += apply_edit(store, item, compound)
+        m.vn = item.vn
+    if shared is not None:
+        base = shared.file[:-len(".msg")]
+        times = tuned_times(store, base, shared.ids[0])
+        out = {}
+        for i, (_t, _w, start, end) in enumerate(times):
+            out[str(i)] = [start, end]
+        if out:
+            for m in group:
+                for rid in m.ids:
+                    ov = store.overrides.setdefault(base, {}).setdefault(rid, {})
+                    ov["times_"] = dict(out)
+    return warnings
+
+
 _WILDCARD_RE = re.compile(r"[\*\?]")
 _last_query = None
 _last_re = None
