@@ -44,6 +44,13 @@ class FinalTextTest(unittest.TestCase):
         self.assertIsNone(final_text(None, "   "))
         self.assertIsNone(final_text(None, None))
 
+    def test_empty_translation_falls_back_to_english(self):
+        # a blank stored translation counts as "not translated": the row must
+        # show the English reference, never be overwritten with an empty value
+        self.assertEqual(final_text("", "Hello"), "Hello")
+        self.assertEqual(final_text("   ", "Hello"), "Hello")
+        self.assertEqual(final_text("\n\t", "Hello"), "Hello")
+
 
 class TransformTest(unittest.TestCase):
     def setUp(self):
@@ -87,6 +94,18 @@ class PatchFileTest(unittest.TestCase):
             r2 = engine.patch_file("text.msg", path)
             self.assertEqual(r2["patched"], 0)
             self.assertEqual(r2["already"], 1)
+
+    def test_empty_translation_is_not_blanked(self):
+        # an empty stored translation must leave the row untouched in the
+        # no-EN fallback path too (never write an empty string)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "text.msg")
+            write_msg(path, {"rows_": make_rows([("ID_BLANK", "", "Korean!")])})
+            engine = PatchEngine({"text.msg": {"ID_BLANK": ""}})
+            r = engine.patch_file("text.msg", path)
+            self.assertEqual(read_rows(path), ["Korean!"])
+            self.assertEqual(r["patched"], 0)
+            self.assertEqual(r["unmatched"], ["Korean!"])
 
 
 class PatchFileIndexedTest(unittest.TestCase):
@@ -146,6 +165,20 @@ class PatchFileIndexedTest(unittest.TestCase):
         self.assertEqual(r["patched"], 1)
         self.assertEqual(r["en_redirected"], 1)
         self.assertEqual(len(r["unmatched"]), 0)
+
+    def test_empty_stored_translation_redirects_to_english(self):
+        # a row whose translation is stored as "" is treated as untranslated:
+        # it must be redirected to the English reference, never blanked
+        engine = PatchEngine({"text.msg": {"ID_ONE": "Một", "ID_TWO": ""}})
+        with mock.patch("patcher.table_rel", return_value=""), \
+                mock.patch("patcher.extract", return_value=self.en_bytes):
+            r = patch_file_indexed(self.tmp, "data.i", "text.msg",
+                                   engine, b"")
+        self.assertEqual(read_rows(self.ko_path),
+                         ["Một", "Fatebreaker", "Korean Empty"])
+        self.assertEqual(r["patched"], 1)        # ID_ONE VI-overwritten
+        self.assertEqual(r["en_redirected"], 1)  # ID_TWO redirected to EN
+        self.assertEqual(len(r["unmatched"]), 1)  # ID_EMPTY (blank EN ref)
 
 
 if __name__ == "__main__":

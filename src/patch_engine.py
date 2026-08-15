@@ -51,10 +51,12 @@ def final_text(translation, en_text):
     The Korean slot is redirected to English first, then Vietnamese is
     overwritten on top: a row shows its Vietnamese translation when one
     exists, otherwise the game's own English text (so untranslated rows are
-    never left in Korean). Returns ``None`` only when neither a translation
-    nor a usable English reference is available.
+    never left in Korean). An empty / whitespace-only translation counts as
+    "not translated" and falls back to the English reference too, so a blank
+    stored value is never written into the game. Returns ``None`` only when
+    neither a translation nor a usable English reference is available.
     """
-    if translation is not None:
+    if translation and translation.strip():
         return translation
     if en_text and en_text.strip():
         return en_text
@@ -142,7 +144,8 @@ class PatchEngine:
         unmatched = []
         for row, (rid, subid, text) in zip(data["rows_"], rows):
             new = self.transform(file, rid, subid, text, stat_rule)
-            if new is None:
+            if not new:
+                # no (non-empty) translation available: leave the row as-is
                 unmatched.append(text)
             elif new == text:
                 already += 1

@@ -95,7 +95,7 @@ def main():
             total_checked += 1
             if new == c.get("text_", ""):
                 already += 1
-            elif vn is not None:
+            elif vn:
                 c["text_"] = new
                 patched += 1
             else:

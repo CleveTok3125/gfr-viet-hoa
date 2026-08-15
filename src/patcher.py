@@ -172,7 +172,7 @@ def patch_file_indexed(game, index, file, engine, index_bytes):
             unmatched.append(en_txt)
         elif new == c.get("text_", ""):
             already += 1
-        elif vn is not None:
+        elif vn:
             c["text_"] = new
             patched += 1
         else:
