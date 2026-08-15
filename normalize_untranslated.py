@@ -1,16 +1,21 @@
 #!/usr/bin/env python3
-"""Clear rows whose stored Vietnamese equals the English reference.
+"""Clear stored rows that are not real Vietnamese translations.
 
-A stored value that matches the game's English text 1-1 (after whitespace
-normalization) is not really a translation: at patch time the EN-redirect
-stage already shows that English text, so the row carries no Vietnamese
-value at all. Clearing it keeps the data honest (the editor flags it as
-untranslated) without changing what the game displays, because the patcher
-treats an empty stored translation as "no translation" and falls back to
-English.
+Two kinds of stored values are emptied:
 
-The comparison is deliberately strict and case-sensitive: only exact 1-1
-matches are cleared (safety first).
+1. *Exact matches*: the stored value equals the game's English text 1-1
+   (whitespace-normalized, case-sensitive -- safety first).
+2. *English prose*: the stored value is prose-length (>= 40 chars) with no
+   Vietnamese diacritics (``tr_edit_core.tr_state`` == "en") and the game's
+   English reference exists. Such rows are English-looking and not translated
+   yet; many also carry encoding-corrupted copies of the English text
+   (``\\x81\\u060c`` instead of ``↓``, ``c`` instead of ``©``).
+
+Clearing is safe for both kinds because the patcher treats an empty stored
+translation as "no translation" and falls back to the game's own English text
+(verified: every cleared prose row has a non-empty English reference), so the
+on-screen text is unchanged or actually cleaned up while the editor honestly
+flags the row as untranslated.
 
 EN source: the game install (--game, authoritative) when given, otherwise
 the local English snapshot data/._en_prev.json. Nothing is written unless
@@ -30,6 +35,8 @@ REPO = os.path.dirname(os.path.abspath(__file__))
 for p in (REPO, os.path.join(REPO, "src"), os.path.join(REPO, "vendor")):
     if p not in sys.path:
         sys.path.insert(0, p)
+
+from tr_edit_core import tr_state
 
 TRANS_PATH = os.path.join(REPO, "translations.json")
 DEFAULT_SNAPSHOT = os.path.join(REPO, "data", "._en_prev.json")
@@ -55,7 +62,8 @@ def load_en(args):
 
 def main():
     ap = argparse.ArgumentParser(
-        description="Clear stored translations that equal the English text.")
+        description="Clear stored values that are not real translations "
+                    "(exact VN=EN matches and English-looking prose).")
     ap.add_argument("--game", help="game install dir (authoritative EN source)")
     ap.add_argument("--snapshot", default=DEFAULT_SNAPSHOT,
                     help="EN snapshot fallback (default: data/._en_prev.json)")
@@ -72,11 +80,13 @@ def main():
         print("No EN source: pass --game or provide the snapshot; aborting.")
         sys.exit(2)
 
-    total = 0
+    total_exact = 0
+    total_prose = 0
     per_file = {}
     for file, tbl in translations.items():
         en = en_src.get(file, {})
-        cleared = 0
+        cleared_exact = 0
+        cleared_prose = 0
         for key, vn in tbl.items():
             vs = norm(vn)
             if not vs:
@@ -84,11 +94,18 @@ def main():
             es = norm(en.get(key))
             if es and vs == es:
                 tbl[key] = ""
-                cleared += 1
-        if cleared:
-            per_file[file] = cleared
-            total += cleared
+                cleared_exact += 1
+                continue
+            if es and tr_state(vn) == "en":
+                tbl[key] = ""
+                cleared_prose += 1
+        n = cleared_exact + cleared_prose
+        if n:
+            per_file[file] = (cleared_exact, cleared_prose, n)
+            total_exact += cleared_exact
+            total_prose += cleared_prose
 
+    total = total_exact + total_prose
     if args.write:
         backup = TRANS_PATH + ".bak"
         with open(TRANS_PATH, encoding="utf-8") as fh, \
@@ -97,13 +114,15 @@ def main():
         with open(TRANS_PATH, "w", encoding="utf-8") as fh:
             fh.write(json.dumps(doc, ensure_ascii=False, indent=1) + "\n")
         print(f"wrote {TRANS_PATH}: {total} rows cleared "
-              f"(backup: {backup})")
+              f"({total_exact} exact, {total_prose} prose; backup: {backup})")
     else:
-        print(f"dry-run: {total} rows across {len(per_file)} files would "
-              f"be cleared")
+        print(f"dry-run: {total} rows across {len(per_file)} files would be "
+              f"cleared ({total_exact} exact, {total_prose} prose)")
 
-    for f, n in sorted(per_file.items(), key=lambda x: -x[1]):
-        print(f"  {f}: {n}")
+    for f, (ex, pr, n) in sorted(per_file.items(), key=lambda x: -x[1][2]):
+        kind = "exact" if ex and not pr else ("prose" if pr and not ex
+                                              else f"{ex} exact + {pr} prose")
+        print(f"  {f}: {n} ({kind})")
 
 
 if __name__ == "__main__":
