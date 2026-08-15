@@ -24,7 +24,7 @@ should read `README.md` instead.**
 | Step | What happens |
 |------|--------------|
 | Source | `translations.json` maps `file.msg -> { stable row id (``id_hash_`` or ``id_hash_::subid_hash_``) : Vietnamese string }` — the single source of truth. No English game text is stored in the repository; the English reference is read from the user's own game at patch time. |
-| Tables | `data/system/table/**/ko/*.msg` are msgpack (`rows_`/`column_`) and the Korean slot is redirected to English first: each row is rewritten to the game's own English text (read from `eng/*.msg` at patch time), then the rows covered by `translations.json` are overwritten with Vietnamese. Untranslated rows stay English — never Korean. Skillboard `Name:\n<stat>` rows are filled at runtime from the stat-only rows translated in the same table (this replaced the old `rules.json` node transform). |
+| Tables | `data/system/table/**/ko/*.msg` are msgpack (`rows_`/`column_`) and the Korean slot is redirected to English first: each row is rewritten to the game's own English text (read from `eng/*.msg` at patch time), then the rows covered by `translations.json` are overwritten with Vietnamese. Untranslated rows stay English — never Korean. A blank / whitespace-only stored translation counts as "not translated" and also falls back to English, so an empty value never blanks a game row. Skillboard `Name:\n<stat>` rows are filled at runtime from the stat-only rows translated in the same table (this replaced the old `rules.json` node transform). |
 | Tags | `*_tag.msg` highlight ranges are remapped to the Vietnamese text (`src/remap_tags.py`); the tuned tables are snapshotted in `tag_tuning.json` so installs never depend on leftover on-disk tag state. |
 | Index | `data.i` (FlatBuffers) is rewritten to point every `ui/.../kor/...` entry at its `eng` counterpart, and to fix the declared `ExternalFileSizes` for every patched loose table. |
 
@@ -305,12 +305,23 @@ EN/VN/ID, `*`/`?` wildcards), `--id <rid>` (ID box), `--range <lo-hi>` (index
 range, bare `100` or open-ended `100-` also work) and `--speaker <name>`.
 Any combination works; omitting an option leaves that box empty.
 
-The item table's last column, `TS (VN)`, reports the voice-sync status of the
-row's *Vietnamese* text (it sits next to EN so it is easy to glance while
-scanning): `-` means the rid carries no `times_` markers in the tuned tables,
-`auto` means it does but no manual override exists yet (the game default /
-auto-applied pacing is in effect), and `edited` means it was hand-fixed via
-the F9 sync panel and an override is stored in `tag_overrides.json`.
+The item table's last two columns report per-row status: `TS (VN)` shows the
+voice-sync state of the row's *Vietnamese* text (it sits next to EN so it is
+easy to glance while scanning): `-` means the rid carries no `times_` markers
+in the tuned tables, `auto` means it does but no manual override exists yet
+(the game default / auto-applied pacing is in effect), and `edited` means it
+was hand-fixed via the F9 sync panel and an override is stored in
+`tag_overrides.json`.
+
+`TR (VN)` reports the translation state of the stored value: `-` a real
+Vietnamese translation is present; `?` the value is blank / whitespace only
+(the patcher treats it as "not translated" and shows the English reference,
+so the row is simply waiting to be filled); `EN` the value is prose-length
+text (>= 40 chars) with no Vietnamese diacritics — an English-looking string
+that has not been translated yet. Short non-Vietnamese values (proper nouns,
+numbers, staff credits) stay `-`. Typing the magic token `@untr` in the
+search box restricts the table to untranslated rows (`?` / `EN`) so you can
+work through them in one sweep; the hint line notes the filter is active.
 
 | Key | Action |
 |-----|--------|
@@ -318,7 +329,7 @@ the F9 sync panel and an override is stored in `tag_overrides.json`.
 | Ctrl+E | focus the editor |
 | Ctrl+S | save the current edit (writes all three JSONs) |
 | Ctrl+R | discard the current edit, reload from the saved state |
-| Ctrl+F | focus search (EN/VN/ID, case-insensitive, debounced, `*`/`?` wildcards; `\n` is treated as a space so a query typed with spaces matches text split across line breaks) |
+| Ctrl+F | focus search (EN/VN/ID, case-insensitive, debounced, `*`/`?` wildcards; `\n` is treated as a space so a query typed with spaces matches text split across line breaks); typing `@untr` instead filters to untranslated rows (see `TR (VN)`) |
 | Ctrl+L | focus the file filter (empty = browse all tables); Tab moves the focus across all five filter boxes (search, range, file, ID, Speaker) |
 | index-range filter | sits next to the file filter (e.g. `100-120`, bare `100`, or open-ended `100-`); when it holds a range only those rows are listed, and the index column `N` shows the item's position in its *own* table's enumeration — stable across the file filter and search, so F8 reports the same number that is on screen |
 | ID / Speaker filter | typing keeps only rows whose row id / speaker matches (bar reads search - range - file - ID - Speaker, left to right); these boxes auto-complete — press Right at the end of the line to accept the suggested value (Tab moves focus) |

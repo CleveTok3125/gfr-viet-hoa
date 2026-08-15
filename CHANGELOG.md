@@ -29,6 +29,22 @@
   manual override yet (game default / auto pacing), and `edited` when a
   hand-fix exists in `tag_overrides.json` (via the F9 panel). It works
   without `--game` and refreshes right after an F9 save.
+- **Patch: blank stored translations are never written into the game.** A
+  row whose stored value is empty (or whitespace only) counts as "not
+  translated": `final_text`, `PatchEngine.patch_file`,
+  `patcher.patch_file_indexed` and `apply_diff` all fall back to the game's
+  English reference instead of overwriting the row with an empty string.
+- **Data: exact VN=EN rows cleared.** `normalize_untranslated.py` empties any
+  stored value that equals the English reference 1-1 (whitespace-normalized,
+  case-sensitive — safety first), using the game install when given (`--game`)
+  else the local `data/._en_prev.json` snapshot; `--write` applies, otherwise
+  it reports. Because of the patcher change above the on-screen text is
+  unchanged, but the 50 cleared rows are now honestly marked untranslated.
+- **Editor: translation-state column + `@untr` filter.** A `TR (VN)` column
+  reports each row as `-` (translated), `?` (blank value) or `EN`
+  (prose-length text with no Vietnamese diacritics); typing `@untr` in the
+  search box keeps only the untranslated rows (`?` / `EN`) so they can be
+  worked through in one sweep.
 
 ## v0.7.0 - EN redirect, voice-sync timing & Barlow font rebuild (2026-08-13)
 
