@@ -56,7 +56,7 @@ class TrColumnAppTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(len(table.columns), 7)
             wanted = {"SNT_FT570020_0000": "-",      # translated
                       "SNT_FT570020_0080": "?",      # empty
-                      "SNT_FT570040_0000": "EN"}     # English prose
+                      "SNT_FT570040_0000": "?"}      # cleared English prose
             seen = {}
             for i in range(table.row_count):
                 row = table.get_row_at(i)
@@ -86,6 +86,28 @@ class TrColumnAppTest(unittest.IsolatedAsyncioTestCase):
             app.refresh_table()
             table = app.query_one("#table", DataTable)
             self.assertGreater(table.row_count, 0)
+
+    async def test_untr_combines_with_keywords(self):
+        app = TrEditApp(default_file=BASE)
+        async with app.run_test():
+            search = app.query_one("#search", Input)
+            # a translated row mentioning "Fraux" matches the keyword but must
+            # be excluded by the untranslated filter
+            search.value = "@untr Fraux"
+            app.refresh_table()
+            self.assertEqual(app.query_one("#table", DataTable).row_count, 0)
+            # keyword matching an untranslated row id keeps it and stays
+            # untranslated-only
+            search.value = "@untr 570040"
+            app.refresh_table()
+            table = app.query_one("#table", DataTable)
+            self.assertGreater(table.row_count, 0)
+            for i in range(table.row_count):
+                row = table.get_row_at(i)
+                rid = row[2].plain if hasattr(row[2], "plain") else row[2]
+                cell = row[6].plain if hasattr(row[6], "plain") else row[6]
+                self.assertIn("570040", rid.lower())
+                self.assertEqual(cell, "?")
 
 
 if __name__ == "__main__":

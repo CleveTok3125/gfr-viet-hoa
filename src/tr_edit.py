@@ -926,9 +926,13 @@ class TrEditApp(App):
         q = self.query_one("#search", Input).value.strip()
         q_id = self.query_one("#id", Input).value.strip().lower()
         q_sp = self.query_one("#speaker", Input).value.strip().lower()
-        # "@untr" is a magic search token: show only untranslated rows
-        # (empty value or English-looking prose), skipping text matching.
-        untr_only = q.lower() == "@untr"
+        # "@untr" is a magic search token: keep only untranslated rows (empty
+        # value or English-looking prose). It combines with any other words in
+        # the query, which still match EN/VN/ID as usual ("@untr gran" -> the
+        # untranslated rows mentioning "gran").
+        parts = q.split()
+        untr_only = any(p.lower() == "@untr" for p in parts)
+        untr_q = " ".join(p for p in parts if p.lower() != "@untr")
         bases = {base} if base else None
         lo, hi = self.range if self.range is not None else (None, None)
         found = []
@@ -950,6 +954,9 @@ class TrEditApp(App):
                 it = ScanItem(store, file, key, vn)
                 if untr_only:
                     if tr_state(vn) == "ok":
+                        idx += 1
+                        continue
+                    if untr_q and not matches(store, it, untr_q):
                         idx += 1
                         continue
                 elif q and not matches(store, it, q):
@@ -1073,7 +1080,8 @@ class TrEditApp(App):
             rng = f"idx {lo}-{hi}" if lo != hi else f"idx {lo}"
         else:
             rng = ""
-        if self.query_one("#search", Input).value.strip().lower() == "@untr":
+        if any(p.lower() == "@untr"
+               for p in self.query_one("#search", Input).value.strip().split()):
             scope += " · untranslated"
         self.query_one("#hint", Static).update(
             f"{n} item(s) · {scope} {rng}".strip() + " · "
