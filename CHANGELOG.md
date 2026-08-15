@@ -34,17 +34,22 @@
   translated": `final_text`, `PatchEngine.patch_file`,
   `patcher.patch_file_indexed` and `apply_diff` all fall back to the game's
   English reference instead of overwriting the row with an empty string.
-- **Data: exact VN=EN rows cleared.** `normalize_untranslated.py` empties any
-  stored value that equals the English reference 1-1 (whitespace-normalized,
-  case-sensitive — safety first), using the game install when given (`--game`)
-  else the local `data/._en_prev.json` snapshot; `--write` applies, otherwise
-  it reports. Because of the patcher change above the on-screen text is
-  unchanged, but the 50 cleared rows are now honestly marked untranslated.
+- **Data: exact VN=EN and English-prose rows cleared.**
+  `normalize_untranslated.py` empties any stored value that is not a real
+  translation: exact matches of the English reference 1-1 (whitespace-
+  normalized, case-sensitive -- safety first) and prose-length values with no
+  Vietnamese diacritics that have a game English reference (these also drop
+  encoding-corrupted copies of the English text, e.g. `\x81\x2c` for `↓`).
+  EN source is the game install when given (`--game`) else the local
+  `data/._en_prev.json` snapshot; `--write` applies, otherwise it reports.
+  Because of the patcher change above the on-screen text is unchanged (or
+  cleaned up), while the 89 cleared rows are honestly marked untranslated.
 - **Editor: translation-state column + `@untr` filter.** A `TR (VN)` column
   reports each row as `-` (translated), `?` (blank value) or `EN`
-  (prose-length text with no Vietnamese diacritics); typing `@untr` in the
-  search box keeps only the untranslated rows (`?` / `EN`) so they can be
-  worked through in one sweep.
+  (prose-length text with no Vietnamese diacritics); the `@untr` token in the
+  search box keeps only the untranslated rows (`?` / `EN`) and combines with
+  any other words in the query (still matching EN/VN/ID), so a sweep like
+  `@untr gran` lands on the untranslated rows mentioning "gran".
 
 ## v0.7.0 - EN redirect, voice-sync timing & Barlow font rebuild (2026-08-13)
 

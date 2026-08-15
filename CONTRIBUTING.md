@@ -319,9 +319,11 @@ Vietnamese translation is present; `?` the value is blank / whitespace only
 so the row is simply waiting to be filled); `EN` the value is prose-length
 text (>= 40 chars) with no Vietnamese diacritics — an English-looking string
 that has not been translated yet. Short non-Vietnamese values (proper nouns,
-numbers, staff credits) stay `-`. Typing the magic token `@untr` in the
-search box restricts the table to untranslated rows (`?` / `EN`) so you can
-work through them in one sweep; the hint line notes the filter is active.
+numbers, staff credits) stay `-`. The magic token `@untr` in the search box
+restricts the table to untranslated rows (`?` / `EN`) and combines with any
+other words in the query, which still match EN/VN/ID as usual (`@untr gran`
+lands on the untranslated rows mentioning "gran"); the hint line notes the
+filter is active.
 
 | Key | Action |
 |-----|--------|
@@ -329,7 +331,7 @@ work through them in one sweep; the hint line notes the filter is active.
 | Ctrl+E | focus the editor |
 | Ctrl+S | save the current edit (writes all three JSONs) |
 | Ctrl+R | discard the current edit, reload from the saved state |
-| Ctrl+F | focus search (EN/VN/ID, case-insensitive, debounced, `*`/`?` wildcards; `\n` is treated as a space so a query typed with spaces matches text split across line breaks); typing `@untr` instead filters to untranslated rows (see `TR (VN)`) |
+| Ctrl+F | focus search (EN/VN/ID, case-insensitive, debounced, `*`/`?` wildcards; `\n` is treated as a space so a query typed with spaces matches text split across line breaks); the `@untr` token filters to untranslated rows (`?` / `EN`, see `TR (VN)`) and combines with any other words in the query |
 | Ctrl+L | focus the file filter (empty = browse all tables); Tab moves the focus across all five filter boxes (search, range, file, ID, Speaker) |
 | index-range filter | sits next to the file filter (e.g. `100-120`, bare `100`, or open-ended `100-`); when it holds a range only those rows are listed, and the index column `N` shows the item's position in its *own* table's enumeration — stable across the file filter and search, so F8 reports the same number that is on screen |
 | ID / Speaker filter | typing keeps only rows whose row id / speaker matches (bar reads search - range - file - ID - Speaker, left to right); these boxes auto-complete — press Right at the end of the line to accept the suggested value (Tab moves focus) |
