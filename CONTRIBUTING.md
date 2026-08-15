@@ -39,21 +39,28 @@ should read `README.md` instead.**
 | `fonts.zip` | Vietnamese font (Barlow, OFL) overrides under `data/font/*`; built from source, **no game assets** |
 | `gfrpatch/` | runnable module: `python3 -m gfrpatch` |
 | `apply.py` | one-command patch for end users |
-| `updater.py` | remap the table onto a newer game build (via `src/remap_ids.py`) |
-| `src/remap_ids.py` | id-match → EN-snapshot fuzzy remap engine (reused by `updater.py`) |
 | `verify.py` | hash-check patched files vs release manifest |
-| `rebuild_translations.py` | regenerate the table from a patched install |
-| `update_filelist.py` | fetch the latest file list from GBFRDataTools |
-| `tag_overrides.json` | manual VN highlight ranges for hard-to-resolve tags |
-| `tag_tuning.json` | tuned `*_tag.msg` snapshot (single source; apply recreates tags) |
-| `vendor/` | bundled pure-Python deps (msgpack, flatbuffers) |
-| `src/` | engine, data.i handling, extraction helpers |
+| `src/` | shared engine / library layer (imported by the tools above; runnable utilities via `python3 -m src.<name>`) |
+| `src/remap_ids.py` | id-match → EN-snapshot fuzzy remap engine (reused by `scripts/updater.py`) |
 | `src/remap_tags.py` | remap `*_tag.msg` offsets to the VN text (`--write --fix-sizes`) |
-| `src/apply_decisions.py` | expand `highlight_decisions.json` phrases into `tag_overrides.json` ranges |
-| `src/tag_review.py` | interactive review of unresolved highlight ranges |
 | `src/tag_tuning.py` | dump/merge/write `tag_tuning.json` |
 | `src/tr_edit.py` | interactive TUI editor for text + markers |
 | `src/tr_edit_core.py` | editor data layer (compound strings, round-trip) |
+| `scripts/` | standalone command-line tools (`python3 scripts/<name>.py`) |
+| `scripts/apply_diff.py` | apply `translations.json` by stable row id to an install |
+| `scripts/updater.py` | remap the table onto a newer game build (via `src/remap_ids.py`) |
+| `scripts/rebuild_translations.py` | regenerate the table from a patched install |
+| `scripts/update_filelist.py` | fetch the latest file list from GBFRDataTools |
+| `scripts/normalize_untranslated.py` | clear stored values that are not real translations |
+| `scripts/apply_decisions.py` | expand `highlight_decisions.json` phrases into `tag_overrides.json` ranges |
+| `scripts/tag_review.py` | interactive review of unresolved highlight ranges |
+| `scripts/build_font.py` | rebuild the SDF bitmap fonts from open-license typefaces |
+| `scripts/build_speaker_map.py` | build the scenario speaker map |
+| `scripts/fix_times_offsets.py` | rewrite `times_` voice-sync offsets to the VN text |
+| `tools/` | retired / one-time migration utilities (kept for reference) |
+| `tag_overrides.json` | manual VN highlight ranges for hard-to-resolve tags |
+| `tag_tuning.json` | tuned `*_tag.msg` snapshot (single source; apply recreates tags) |
+| `vendor/` | bundled pure-Python deps (msgpack, flatbuffers) |
 
 No external pip installs are needed; the bundled `vendor/` is used automatically.
 
@@ -69,7 +76,7 @@ installed via pip.
 2. Refresh the bundled file list from GBFRDataTools:
 
    ```bash
-   python3 update_filelist.py
+   python3 scripts/update_filelist.py
    ```
 
    (This downloads `filelist.txt` from the upstream GBFRDataTools project and
@@ -78,7 +85,7 @@ installed via pip.
 3. Remap the id-keyed table onto the new build:
 
    ```bash
-   python3 updater.py --game "/path/to/new/install"
+   python3 scripts/updater.py --game "/path/to/new/install"
    ```
 
    Rows are matched by their stable row id first. Rows whose id disappeared
@@ -104,13 +111,13 @@ installed via pip.
 
    Expect `Build check: WARNING` to disappear only after `build_fingerprint`
    matches the new build; if you rebuilt `translations.json` with
-   `rebuild_translations.py`, the fingerprint is updated automatically.
+   `scripts/rebuild_translations.py`, the fingerprint is updated automatically.
 7. Remap the dialogue highlight offsets to the new text and re-verify:
 
    ```bash
    python3 -m src.remap_tags --all --game "/path/to/new/install" \
        --report /tmp/tag_review.json
-   python3 -m src.tag_review --game "/path/to/new/install"
+   python3 scripts/tag_review.py --game "/path/to/new/install"
    python3 -m src.remap_tags --all --game "/path/to/new/install" --write \
        --overrides tag_overrides.json --fix-sizes
    python3 verify.py --game "/path/to/new/install" --gen
@@ -136,7 +143,7 @@ If `translations.json` is lost or you want to regenerate it from an install
 that already has the Vietnamese patch applied:
 
 ```bash
-python3 rebuild_translations.py --game "/path/to/patched/install"
+python3 scripts/rebuild_translations.py --game "/path/to/patched/install"
 ```
 
 It diffs the English sources (extracted from `data.i`) against the installed
@@ -256,7 +263,7 @@ patch targets the EN/VI UI. **Everything in `data/fonts.zip` and
 game assets.** No glyphs, metrics, bitmaps or names are copied from the stock
 game fonts (`tt_pfdintextpro-*`, `fttk_yoongothic750`), which are never
 stored in this repository. The `.msg`/`.wtb` shipped in `fonts.zip` are pure
-build outputs of `src/build_font.py` from `Barlow-Medium.ttf` (SIL OFL 1.1)
+build outputs of `scripts/build_font.py` from `Barlow-Medium.ttf` (SIL OFL 1.1)
 plus OFL / public-domain fallback subsets, and the command below reproduces
 them byte-for-byte, so they can always be regenerated instead of
 redistributed.
@@ -264,7 +271,7 @@ redistributed.
 To rebuild the font:
 
 ```bash
-python3 -m src.build_font --font data/fonts_src/Barlow-Medium.ttf \
+python3 scripts/build_font.py --font data/fonts_src/Barlow-Medium.ttf \
     --fallback data/fonts_src/fallback-symbols.ttf \
     --fallback data/fonts_src/fallback-cjk.ttf \
     --out /tmp/font-out --name barlow-medium --size 38 --padding 6 \
@@ -393,7 +400,7 @@ untouched):
 ```
 
 Highlight decisions are stored in phrase form in `highlight_decisions.json` (VN phrase
-per row id). `src/apply_decisions.py` expands them into the positional
+per row id). `scripts/apply_decisions.py` expands them into the positional
 `tag_overrides.json` ranges against an installed copy of the game; the editor
 keeps both files in sync on every save. Highlights that exist only in the
 game's tuned tag tables (never recorded in decisions/overrides) are also shown
@@ -419,15 +426,15 @@ tag table and renders literal `<d>` markers.
 Ranges that are translated freely (e.g. `perfect dodge` → `né tránh hoàn hảo`)
 cannot be located automatically. They are surfaced with `--report review.json`,
 and each one is resolved interactively with
-`python3 -m src.tag_review --game "<game>"`, which asks for the exact VN range
-and stores the answer in `tag_overrides.json`. `remap_tags.py` applies those
+`python3 scripts/tag_review.py --game "<game>"`, which asks for the exact VN range
+and stores the answer in `tag_overrides.json`. `src/remap_tags.py` applies those
 overrides verbatim when `--overrides tag_overrides.json` is passed.
 
 Voice sync / text-reveal timing: dialogue `*_tag.msg` tables carry `times_`
 markers (a character offset, a wait time and a wait flag) that pace the
 text-reveal against the spoken line. Their offsets index the original
 (English) string, so after translation they point at the wrong character and
-the reveal drifts from the voice. `src/fix_times_offsets.py` rewrites every
+the reveal drifts from the voice. `scripts/fix_times_offsets.py` rewrites every
 `times_` offset to the matching position in the Vietnamese text (EN→VN char
 map), exactly like the highlight spans; run it with `--game <install>
 --write` after a big translation pass, then the tuned tags are already
@@ -444,7 +451,7 @@ mechanical explanation behind each.
   dialogue lines may still read "Anh" even for a female captain. A pass
   over the scenario lines converted the bulk of these to "thuyền trưởng"
   (captain) or "bạn", and the speaker map in `data/scenario_speakers.json`
-  plus the review script (`src/build_speaker_map.py`) make it possible to
+  plus the review script (`scripts/build_speaker_map.py`) make it possible to
   audit the rest; a few stragglers may remain.
 - **Some pop-ups, waiting/loading screens lose their text.** Certain UI
   elements (pop-up prompts, wait dialogs, loading screens) can end up blank or
@@ -453,7 +460,7 @@ mechanical explanation behind each.
   `<d>` marker issue fixed for dialogue.
 - **Some sections are not fully translated yet.** A number of strings are still
   untranslated (English or Korean text remains). These are tracked in
-  `translations.json` and get filled in over time; run `updater.py` after a game
+  `translations.json` and get filled in over time; run `scripts/updater.py` after a game
   update to surface the newest untranslated rows.
 - **Button-icon placeholders can drift or fail to render.** When a string
   contains a button-icon token (e.g. a controller/gamepad key glyph), the icon
@@ -463,7 +470,7 @@ mechanical explanation behind each.
   `times_` markers (a character offset, a wait time and a wait flag) that pace
   the text-reveal against the spoken line. Their offsets index the original
   (English) string, so after translation they point at the wrong character and
-  the reveal drifts from the voice. `src/fix_times_offsets.py` rewrites every
+  the reveal drifts from the voice. `scripts/fix_times_offsets.py` rewrites every
   `times_` offset to the matching position in the Vietnamese text (EN→VN char
   map), exactly like the highlight spans; run it with `--game <install>
   --write` after a big translation pass, then the tuned tags are already

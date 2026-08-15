@@ -50,6 +50,16 @@
   search box keeps only the untranslated rows (`?` / `EN`) and combines with
   any other words in the query (still matching EN/VN/ID), so a sweep like
   `@untr gran` lands on the untranslated rows mentioning "gran".
+- **Repo layout: tools moved into `scripts/`.** The standalone command-line
+  tools now live under `scripts/` (`python3 scripts/<name>.py`): `apply_diff`,
+  `updater`, `rebuild_translations`, `update_filelist`,
+  `normalize_untranslated`, `apply_decisions`, `build_font`,
+  `build_speaker_map`, `fix_times_offsets`, `review_dump`, `tag_review`.
+  `src/` is now the shared library layer (runnable utilities keep
+  `python3 -m src.<name>`); retired/one-time tools sit in `tools/`
+  (`fix_translations`, `convert_to_id_keys`, `verify_conversion`). The two
+  end-user entrypoints stay where they are (`python3 apply.py`,
+  `python3 -m gfrpatch`).
 
 ## v0.7.0 - EN redirect, voice-sync timing & Barlow font rebuild (2026-08-13)
 

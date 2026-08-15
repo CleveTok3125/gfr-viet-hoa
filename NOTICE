@@ -8,10 +8,9 @@ their respective owners.
 License scope
 -------------
 
-Source code (src/, apply.py, apply_diff.py, gfrpatch/, tools/, scripts/,
-verify.py, rebuild_translations.py, updater.py, fix_translations.py,
-update_filelist.py): original work of the project authors, licensed under the
-GNU General Public License v3 (see LICENSE).
+Source code (src/, gfrpatch/, scripts/, tools/, apply.py, verify.py):
+original work of the project authors, licensed under the GNU General Public
+License v3 (see LICENSE).
 
 Translation data (translations.json, highlight_decisions.json,
 tag_overrides.json, tag_tuning.json): only the file format and structure, and
