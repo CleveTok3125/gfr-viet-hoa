@@ -52,7 +52,7 @@ class TimesColumnAppTest(unittest.IsolatedAsyncioTestCase):
         app = TrEditApp(default_file=BASE)
         async with app.run_test():
             table = app.query_one("#table", DataTable)
-            self.assertEqual(len(table.columns), 6)
+            self.assertEqual(len(table.columns), 7)
             wanted = {"SNT_WD720020_0000": "edited",
                       "SNT_WD720010_0000": "auto",
                       "SNT_WD720020_0170": "-"}

@@ -760,6 +760,31 @@ def times_state(store, base, rid):
     return "auto"
 
 
+_VIET_PAT = re.compile(r"[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệ"
+                       r"ìíỉĩịòóỏõọôồốổỗộơờớởỡợ"
+                       r"ùúủũụưừứửữựỳýỷỹỵđĐ]")
+UNTR_PROSE_MIN = 40
+
+
+def tr_state(vn):
+    """Return the translation state of one row's stored value.
+
+    ``"ok"``    -> a real Vietnamese translation is present.
+    ``"empty"`` -> nothing stored (blank / whitespace only); the patcher
+                   falls back to the English reference for such rows.
+    ``"en"``    -> prose-length text (>= ``UNTR_PROSE_MIN`` chars) with no
+                   Vietnamese diacritics: an English-looking string that has
+                   not been translated yet. Short non-Vietnamese strings
+                   (proper nouns, numbers, staff credits) stay ``"ok"``.
+    """
+    v = (vn or "").strip()
+    if not v:
+        return "empty"
+    if len(v) >= UNTR_PROSE_MIN and not _VIET_PAT.search(v):
+        return "en"
+    return "ok"
+
+
 def _load_markers(store, file, ids, vn):
     """Merge highlight phrase markers + player position from decisions/overrides."""
     base = file[:-len(".msg")]

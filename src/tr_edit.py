@@ -81,6 +81,7 @@ from tr_edit_core import (
     matches,
     parse_compound,
     times_state,
+    tr_state,
 )
 
 MAX_ROWS = 3000
@@ -891,6 +892,7 @@ class TrEditApp(App):
         table.add_column("SPK", key="spk", width=14)
         table.add_column("EN", key="en")
         table.add_column("TS (VN)", key="ts", width=8)
+        table.add_column("TR (VN)", key="tr", width=7)
         # make the preview/legend scroll containers focusable so PageUp/
         # PageDown/arrows/mouse-wheel scroll them (they are by default)
         self.query_one("#preview_sc", ScrollableContainer).can_focus = True
@@ -924,6 +926,9 @@ class TrEditApp(App):
         q = self.query_one("#search", Input).value.strip()
         q_id = self.query_one("#id", Input).value.strip().lower()
         q_sp = self.query_one("#speaker", Input).value.strip().lower()
+        # "@untr" is a magic search token: show only untranslated rows
+        # (empty value or English-looking prose), skipping text matching.
+        untr_only = q.lower() == "@untr"
         bases = {base} if base else None
         lo, hi = self.range if self.range is not None else (None, None)
         found = []
@@ -943,7 +948,11 @@ class TrEditApp(App):
                 if hi is not None and idx > hi:
                     break
                 it = ScanItem(store, file, key, vn)
-                if q and not matches(store, it, q):
+                if untr_only:
+                    if tr_state(vn) == "ok":
+                        idx += 1
+                        continue
+                elif q and not matches(store, it, q):
                     idx += 1
                     continue
                 if q_id and not any(q_id in rid.lower() for rid in it.ids):
@@ -996,9 +1005,19 @@ class TrEditApp(App):
                 ts_cell = Text("auto", style="yellow")
             else:
                 ts_cell = Text("-", style="dim")
+            # translation state: '-' translated, '?' empty value, 'EN'
+            # English-looking prose that has not been translated yet.
+            tr = tr_state(it.vn)
+            if tr == "empty":
+                tr_cell = Text("?", style="bold red")
+            elif tr == "en":
+                tr_cell = Text("EN", style="yellow")
+            else:
+                tr_cell = Text("-", style="dim")
             table.add_row(str(found_idx[i]), nid, cell,
                           (it.speaker or "")[:14] or "-",
-                          en_line, ts_cell, key=(it.file, it.key))
+                          en_line, ts_cell, tr_cell,
+                          key=(it.file, it.key))
         # selection: keep the current row while editing (dirty), else pick
         # first / preserved key. RowHighlighted does not re-fire after a
         # full repopulate, so select + load explicitly. Guard against the
@@ -1054,6 +1073,8 @@ class TrEditApp(App):
             rng = f"idx {lo}-{hi}" if lo != hi else f"idx {lo}"
         else:
             rng = ""
+        if self.query_one("#search", Input).value.strip().lower() == "@untr":
+            scope += " · untranslated"
         self.query_one("#hint", Static).update(
             f"{n} item(s) · {scope} {rng}".strip() + " · "
             "Ctrl+S save · Ctrl+R reset · Ctrl+F search · F4 EN · F3 wrap")
