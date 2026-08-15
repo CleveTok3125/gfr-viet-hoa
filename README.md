@@ -101,6 +101,11 @@ the interactive TUI editor:
 python3 -m gfrpatch edit --game "<game>" --file text_scenario_030
 ```
 
+The editor pre-fills its filter boxes from the command line, so a single
+command can land on the rows you want to review — e.g. `--id SNT_WD720020_0320`
+fills the ID box, `--search "<text>"` the search box, `--range 100-120` the
+index range and `--speaker "<name>"` the speaker box (any combination works).
+
 The full editor key reference is in [`CONTRIBUTING.md`](#maintainer-docs).
 
 **Supported builds:** the table is maintained for the latest game build. On an

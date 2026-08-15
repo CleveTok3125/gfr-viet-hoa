@@ -18,6 +18,11 @@
   every member's rids. A warning line flags groups whose members differ
   (saving will unify them). Grouping reads the English text from the game
   install, so it only applies when the editor runs with `--game`.
+- **Editor: open an item straight from the command line.** `gfrpatch edit`
+  (and `src/tr_edit.py`) pre-fill the filter boxes at launch: `--search`,
+  `--id`, `--range` and `--speaker` join the existing `--file`, so a one-line
+  command lands the item list directly on the rows you came to edit (the
+  same filtering applies as if you had typed them).
 
 ## v0.7.0 - EN redirect, voice-sync timing & Barlow font rebuild (2026-08-13)
 

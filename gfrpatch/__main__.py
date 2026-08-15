@@ -52,7 +52,7 @@ def pick_game_dir(explicit):
         print(f"No data.i found under {answer!r}; try again.")
 
 
-def run_edit(game, file):
+def run_edit(game, file, search, id_, range_, speaker):
     """Launch the TUI editor (src/tr_edit.py) as a child process."""
     src = os.path.join(REPO, "src", "tr_edit.py")
     cmd = [sys.executable, src]
@@ -60,6 +60,14 @@ def run_edit(game, file):
         cmd += ["--game", game]
     if file:
         cmd += ["--file", file]
+    if search:
+        cmd += ["--search", search]
+    if id_:
+        cmd += ["--id", id_]
+    if range_:
+        cmd += ["--range", range_]
+    if speaker:
+        cmd += ["--speaker", speaker]
     print("Launching editor: " + " ".join(cmd))
     return os.execv(sys.executable, cmd)
 
@@ -88,10 +96,19 @@ def main():
     ep.add_argument("--game", help="path to the game install (for EN/JA reference)")
     ep.add_argument("--file", default=None,
                     help="initial table basename, e.g. text_scenario_030")
+    ep.add_argument("--search", default=None,
+                    help="pre-fill the search box (EN / VN / ID, * ? wildcards)")
+    ep.add_argument("--id", default=None,
+                    help="pre-fill the ID filter box with a row id")
+    ep.add_argument("--range", default=None,
+                    help="pre-fill the index-range box, e.g. '100-120' or '100'")
+    ep.add_argument("--speaker", default=None,
+                    help="pre-fill the Speaker filter box")
     args = ap.parse_args()
 
     if args.sub == "edit":
-        return run_edit(args.game, args.file)
+        return run_edit(args.game, args.file, args.search, args.id,
+                        args.range, args.speaker)
 
     game = pick_game_dir(args.game)
     if not game:

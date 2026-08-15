@@ -293,9 +293,17 @@ PYTHONPATH=src:vendor python3 src/tr_edit.py \
     --game "/path/to/install" [--file text_scenario_030]
 ```
 
+The launcher (`python3 -m gfrpatch edit ...`) forwards every option below.
 Each entry is shown as a *compound string*: the Vietnamese text with inline
 markers (conventions below). Saving (Ctrl+S) writes back to `translations.json`,
 `highlight_decisions.json` and `tag_overrides.json` in one go.
+
+The filter boxes are pre-filled at launch from the CLI so you can land
+directly on the rows you came for — the same filtering logic then applies as
+if you typed them: `--file <base>` (file box), `--search <text>` (search:
+EN/VN/ID, `*`/`?` wildcards), `--id <rid>` (ID box), `--range <lo-hi>` (index
+range, bare `100` or open-ended `100-` also work) and `--speaker <name>`.
+Any combination works; omitting an option leaves that box empty.
 
 | Key | Action |
 |-----|--------|

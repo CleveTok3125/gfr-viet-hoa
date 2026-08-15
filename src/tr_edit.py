@@ -811,7 +811,8 @@ class TrEditApp(App):
         Binding("ctrl+q", "quit", "Quit", show=False),
     ]
 
-    def __init__(self, game_dir=None, default_file=None):
+    def __init__(self, game_dir=None, default_file=None, default_search=None,
+                 default_id=None, default_range=None, default_speaker=None):
         super().__init__()
         self.store = Store(game_dir=game_dir)
         if default_file:
@@ -819,13 +820,19 @@ class TrEditApp(App):
             self.base = default_file
         else:
             self.base = ""   # empty = browse all tables
+        self._init_search = (default_search or "").strip()
+        self._init_id = (default_id or "").strip()
+        self._init_range = (default_range or "").strip()
+        self._init_speaker = (default_speaker or "").strip()
         self._search_timer = None
         self._search_armed_query = ""
         self._skip_search_debounce = False
         self._times_timer = None   # debounced live sync-highlight (F9 panel)
         self._skip_range_sync = False
         self._skip_filter_refresh = False
-        self.range = None   # (start, end) inclusive, or None
+        # initial index-range from the CLI (on_range parses the box when the
+        # user types; the startup refresh must see it too)
+        self.range = self._parse_range(self._init_range)
         self.items = []            # filtered Item list in table order
         self.items_idx = []        # enumeration index per self.items entry
         self.current_key = None    # (file, en) currently in the editor
@@ -846,14 +853,16 @@ class TrEditApp(App):
         with Vertical():
             with Horizontal(classes="filters"):
                 yield Input(placeholder="search EN / VN / ID (* ? wildcards)",
-                            id="search")
-                yield Input(placeholder="index", id="range")
+                            value=self._init_search, id="search")
+                yield Input(placeholder="index", value=self._init_range,
+                            id="range")
                 yield Input(placeholder="file base (e.g. text_scenario_030)",
                             value=self.base, id="file",
                             suggester=PrefixSuggester(self._file_bases))
-                yield Input(placeholder="ID", id="id",
+                yield Input(placeholder="ID", value=self._init_id, id="id",
                             suggester=PrefixSuggester(self._all_ids))
-                yield Input(placeholder="Speaker", id="speaker",
+                yield Input(placeholder="Speaker", value=self._init_speaker,
+                            id="speaker",
                             suggester=PrefixSuggester(self._speaker_names))
             with Horizontal(classes="main"):
                 with Vertical(classes="pane pane-left"):
@@ -2021,8 +2030,18 @@ def main() -> int:
     ap.add_argument("--game", default=None, help="game install dir")
     ap.add_argument("--file", default=None,
                     help="initial table basename, e.g. text_scenario_030")
+    ap.add_argument("--search", default=None,
+                    help="pre-fill the search box (EN / VN / ID, * ? wildcards)")
+    ap.add_argument("--id", default=None,
+                    help="pre-fill the ID filter box with a row id")
+    ap.add_argument("--range", default=None,
+                    help="pre-fill the index-range box, e.g. '100-120' or '100'")
+    ap.add_argument("--speaker", default=None,
+                    help="pre-fill the Speaker filter box")
     args = ap.parse_args()
-    app = TrEditApp(game_dir=args.game, default_file=args.file)
+    app = TrEditApp(game_dir=args.game, default_file=args.file,
+                    default_search=args.search, default_id=args.id,
+                    default_range=args.range, default_speaker=args.speaker)
     app.run()
     return 0
 
