@@ -114,11 +114,17 @@ class LaunchFiltersTest(unittest.IsolatedAsyncioTestCase):
             app._start_scan_build(delay=0.01)
             status = app.query_one("#hint", Static)
             self.assertNotIn("Building", str(status.content))
+            # The armed hint may still show the "Building" placeholder or,
+            # once the first progress report lands, a live "Index:" line;
+            # either one proves the debounce fired while the build was still
+            # running. Accept both so the test is robust to how quickly the
+            # build gets going.
             for _ in range(60):
                 await pilot.pause(0.02)
-                if str(status.content).startswith("Building"):
+                if str(status.content).startswith(("Building", "Index:")):
                     break
-            self.assertTrue(str(status.content).startswith("Building"))
+            self.assertTrue(
+                str(status.content).startswith(("Building", "Index:")))
             for _ in range(60):
                 await pilot.pause(0.02)
                 if app.store.scan_rows is not None \

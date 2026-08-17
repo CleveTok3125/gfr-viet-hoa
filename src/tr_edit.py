@@ -1577,6 +1577,11 @@ class TrEditApp(App):
                     i += len(qn)
         else:
             spans = []
+        # ``_norm_key`` trims leading whitespace (split/join), so spans found
+        # on the folded key must be shifted back to the original positions.
+        base = len(vn) - len(vn.lstrip())
+        if base:
+            spans = [(s + base, e + base) for s, e in spans]
         # map each times_ offset to the pause character. The engine pauses
         # right after the character at ``offset - 1`` (the first char of the
         # *next* reveal segment is at ``offset``), so the tint sits there,

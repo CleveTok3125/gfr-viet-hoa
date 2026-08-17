@@ -776,7 +776,13 @@ def apply_group_edit(store, group, compound):
 _WILDCARD_RE = re.compile(r"[\*\?]")
 _last_query = None
 _last_re = None
-_SPACE_RE = re.compile(r"\s+")
+
+# C-level fold for pure-ASCII search keys: lowercase A-Z and map ASCII
+# whitespace to a single space. Avoids the two-regex cold path for the English
+# reference (100% ASCII), which is the bulk of scan_index normalizations.
+_TRANSLATE = str.maketrans(
+    {**{i: chr(i + 32) for i in range(ord("A"), ord("Z") + 1)},
+     **{ord(c): " " for c in "\t\n\r\f\v"}})
 
 # Vietnamese tone-placement variants: the same word may be typed with the
 # tone on the first vowel (old style, e.g. ``hủy``) or on the second vowel
@@ -794,6 +800,10 @@ VN_MAP = {
 _VN_RE = re.compile("|".join(sorted(VN_MAP, key=len, reverse=True)))
 
 
+def _vn_fix(m):
+    return VN_MAP[m.group(0)]
+
+
 @functools.lru_cache(maxsize=1 << 18)
 def _norm_key(s):
     """Lowercase, collapse whitespace and normalize Vietnamese tone mark
@@ -801,9 +811,16 @@ def _norm_key(s):
 
     The result is the shared search key: the query and every candidate are
     run through the same fold, so ``huỷ diệt`` matches ``hủy diệt``.
+
+    Pure-ASCII keys (the English reference is 100% ASCII) take a C-level
+    ``str.translate`` + ``split/join`` path; Vietnamese keys keep the tone
+    regex. Edge whitespace is trimmed by ``split/join`` (queries are always
+    stripped first, so substring matching is unaffected).
     """
-    s = _VN_RE.sub(lambda m: VN_MAP[m.group(0)], s.lower())
-    return _SPACE_RE.sub(" ", s)
+    if s.isascii():
+        return " ".join(s.translate(_TRANSLATE).split())
+    s = _VN_RE.sub(_vn_fix, s.lower())
+    return " ".join(s.split())
 
 
 def _wildcard_regex(q):
