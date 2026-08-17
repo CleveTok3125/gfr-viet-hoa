@@ -1,0 +1,14 @@
+# Optional: install the pinned compiled builds for the TUI editor / patcher.
+#
+#   python3 -m pip install -r requirements-optional.txt
+#
+# Without these the project runs on the bundled pure-Python copies in vendor/
+# (msgpack, flatbuffers, xxh64_pure, lz4_block_pure); a pip install simply
+# makes the hot paths use the compiled builds instead (msgpack/xxhash/lz4 are
+# C extensions, much faster than the pure fallbacks). `textual` has no bundled
+# fallback — it is required to run the interactive editor (src/tr_edit.py).
+msgpack==1.1.2
+flatbuffers==25.12.19
+xxhash==3.8.1
+lz4==4.4.5
+textual==8.2.8

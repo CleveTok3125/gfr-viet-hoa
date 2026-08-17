@@ -20,8 +20,8 @@ import struct
 
 from flatbuffers import encode, number_types
 
+from deps.xxh64 import xxh64
 from gbfr_schema import IndexFile
-from xxh64_pure import xxh64
 
 
 def hash_path(p):

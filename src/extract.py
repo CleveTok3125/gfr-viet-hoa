@@ -2,9 +2,9 @@
 import os
 import struct
 
+from deps.lz4_block import decompress as _lz4_decompress
+from deps.xxh64 import xxh64
 from gbfr_schema import IndexFile
-from lz4_block_pure import decompress as _lz4_decompress
-from xxh64_pure import xxh64
 
 
 def vec_data(buf, root, field_vt):

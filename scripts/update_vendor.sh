@@ -48,6 +48,36 @@ fetch_license \
   "https://raw.githubusercontent.com/google/flatbuffers/v$FLATBUFFERS_VERSION/LICENSE" \
   "$VENDOR/flatbuffers/LICENSE" || true
 
+info "Verifying vendored files are byte-identical to the pinned wheels"
+python3 - "$TMP" "$VENDOR" <<'PY'
+import hashlib
+import os
+import sys
+
+tmp, vendor = sys.argv[1], sys.argv[2]
+# (source dir of the freshly downloaded pinned artifact, vendored dir)
+pairs = ((os.path.join(tmp, "msgpack"), "msgpack"),
+         (os.path.join(tmp, "fb", "flatbuffers"), "flatbuffers"))
+bad = []
+for src_dir, rel in pairs:
+    vendored = os.path.join(vendor, rel)
+    for fname in os.listdir(vendored):
+        if not fname.endswith(".py"):
+            continue  # licenses are fetched from upstream, not the wheel
+        vpath = os.path.join(vendored, fname)
+        spath = os.path.join(src_dir, fname)
+        if not os.path.isfile(spath):
+            continue  # retained-only module, not shipped by the pin
+        a = hashlib.md5(open(vpath, "rb").read()).hexdigest()
+        b = hashlib.md5(open(spath, "rb").read()).hexdigest()
+        if a != b:
+            bad.append(f"{rel}/{fname}")
+if bad:
+    print("DRIFT from pinned wheels:\n  " + "\n  ".join(bad))
+    sys.exit(1)
+print("  ok: vendored files match the pinned wheels byte-for-byte")
+PY
+
 # strip bytecode cached during previous runs
 find "$VENDOR" -name __pycache__ -type d -prune -exec rm -rf {} +
 

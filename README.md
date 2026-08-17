@@ -43,11 +43,19 @@ explained in [`CONTRIBUTING.md`](#maintainer-docs).
 
 Download this repository (GitLab **Code → Download source code** / Download
 ZIP), extract it anywhere, then run the module from inside the folder — no
-build step, no pip installs:
+build step, no pip installs required (third-party libs ship as pure-Python
+fallbacks in `vendor/`; pip installs of the pinned builds are used when
+present and just make the hot paths faster):
 
 ```bash
 python3 -m gfrpatch                       # asks for the game folder, or:
 python3 -m gfrpatch --game "C:\Games\Granblue Fantasy - Relink"
+```
+
+The interactive editor additionally needs `textual` (no bundled fallback):
+
+```bash
+python3 -m pip install -r requirements-optional.txt
 ```
 
 **Windows:** everything is pure Python (stdlib + bundled `vendor/`), so it
