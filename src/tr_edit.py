@@ -70,6 +70,7 @@ from typing import ClassVar
 from tr_edit_core import (
     ScanItem,
     Store,
+    _norm_key,
     apply_edit,
     apply_group_edit,
     authored_signature,
@@ -442,6 +443,7 @@ class TimesPanel(Vertical):
             ov["times_"] = out
         app.store.save_all()
         app._dup_sync = None  # times_ overrides changed -> re-derive the checks
+        app.store.scan_rows = None  # precomputed search keys now stale
         self.notify(f"Saved {len(out)} voice-sync marker(s) - rebuild the "
                     "patch for the game to pick them up")
         app.close_slot()
@@ -933,6 +935,11 @@ class TrEditApp(App):
         parts = q.split()
         untr_only = any(p.lower() == "@untr" for p in parts)
         untr_q = " ".join(p for p in parts if p.lower() != "@untr")
+        # Normalize the query once: plain substrings match the precomputed
+        # per-row keys directly, wildcard queries keep the regex path.
+        q_norm = _norm_key(untr_q) if untr_q and not untr_only else ""
+        untr_q_norm = _norm_key(untr_q) if untr_q else ""
+        q_wild = "*" in untr_q or "?" in untr_q
         bases = {base} if base else None
         lo, hi = self.range if self.range is not None else (None, None)
         found = []
@@ -940,39 +947,51 @@ class TrEditApp(App):
         # The N column (and the range box) use the row's position inside its
         # own table, so the number is stable across the file filter and search,
         # and view_context (F8) reports the same index the user sees.
-        tables = store.tables
-        for file, table in tables.items():
-            if bases is not None and file[:-len(".msg")] not in bases:
+        # Precomputed per-row descriptors (Store.scan_index) carry the
+        # normalized search keys, so filtering reads plain strings instead of
+        # re-normalizing the whole store on every keypress.
+        for d in store.scan_index():
+            if bases is not None and d.file[:-len(".msg")] not in bases:
                 continue
-            idx = 0
-            for key, vn in table.items():
-                if lo is not None and idx < lo:
-                    idx += 1
+            if lo is not None and d.idx < lo:
+                continue
+            if hi is not None and d.idx > hi:
+                break
+            it = None
+            if untr_only:
+                if d.tr == "ok":
                     continue
-                if hi is not None and idx > hi:
-                    break
-                it = ScanItem(store, file, key, vn)
-                if untr_only:
-                    if tr_state(vn) == "ok":
-                        idx += 1
+                if untr_q_norm:
+                    if q_wild:
+                        it = ScanItem(store, d.file, d.key, d.vn)
+                        it.en_norm, it.vn_norm, it.ids_low = d.en_norm, d.vn_norm, d.ids_low
+                        if not matches(store, it, untr_q):
+                            continue
+                    elif not (untr_q_norm in d.en_norm
+                              or untr_q_norm in d.vn_norm
+                              or any(untr_q_norm in r for r in d.ids_low)):
                         continue
-                    if untr_q and not matches(store, it, untr_q):
-                        idx += 1
+            elif q_norm:
+                if q_wild:
+                    it = ScanItem(store, d.file, d.key, d.vn)
+                    it.en_norm, it.vn_norm, it.ids_low = d.en_norm, d.vn_norm, d.ids_low
+                    if not matches(store, it, untr_q):
                         continue
-                elif q and not matches(store, it, q):
-                    idx += 1
+                elif not (q_norm in d.en_norm
+                          or q_norm in d.vn_norm
+                          or any(q_norm in r for r in d.ids_low)):
                     continue
-                if q_id and not any(q_id in rid.lower() for rid in it.ids):
-                    idx += 1
-                    continue
-                if q_sp and q_sp not in (it.speaker or "").lower():
-                    idx += 1
-                    continue
-                found.append(it)
-                found_idx.append(idx)
-                idx += 1
-                if len(found) >= MAX_ROWS:
-                    break
+            if q_id and not any(q_id in r for r in d.ids_low):
+                continue
+            if q_sp and q_sp not in d.speaker_low:
+                continue
+            if it is None:
+                it = ScanItem(store, d.file, d.key, d.vn)
+                it.en_norm, it.vn_norm, it.ids_low = d.en_norm, d.vn_norm, d.ids_low
+            it.has_times = d.has_times
+            it.tr = d.tr
+            found.append(it)
+            found_idx.append(d.idx)
             if len(found) >= MAX_ROWS:
                 break
         table = self.query_one("#table", DataTable)
@@ -1004,8 +1023,15 @@ class TrEditApp(App):
                 cell = ids or "-"
             # voice-sync status (times_): '-' none, 'auto' default pacing,
             # 'edited' hand-fixed via the F9 panel (override written).
-            ts = times_state(store, it.file[:-len(".msg")],
-                             it.ids[0] if it.ids else "")
+            if it.has_times is None:
+                ts = times_state(store, it.file[:-len(".msg")],
+                                 it.ids[0] if it.ids else "")
+            elif it.has_times:
+                ov = (store.overrides or {}).get(it.file[:-len(".msg")],
+                                                 {}).get(it.ids[0], {}).get("times_")
+                ts = "edited" if ov else "auto"
+            else:
+                ts = "none"
             if ts == "edited":
                 ts_cell = Text("edited", style="#4EBF71")
             elif ts == "auto":
@@ -1014,7 +1040,7 @@ class TrEditApp(App):
                 ts_cell = Text("-", style="dim")
             # translation state: '-' translated, '?' empty value, 'EN'
             # English-looking prose that has not been translated yet.
-            tr = tr_state(it.vn)
+            tr = it.tr if it.tr is not None else tr_state(it.vn)
             if tr == "empty":
                 tr_cell = Text("?", style="bold red")
             elif tr == "en":
@@ -1556,6 +1582,7 @@ class TrEditApp(App):
         self.store.save_all()
         self.dirty = False
         self._dup_sync = None  # authored state changed -> re-derive the checks
+        self.store.scan_rows = None  # precomputed search keys now stale
         # rebuild the list + cells (drops the red * from rows now in sync with
         # canon) and re-load the current row with its freshly saved state
         self.refresh_table()
