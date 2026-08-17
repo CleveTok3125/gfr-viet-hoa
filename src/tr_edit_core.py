@@ -83,6 +83,7 @@ class Store:
         self.tuned = self._load_json("tag_tuning.json")  # spans baked into game
         self.speakers = self._load_json("data/scenario_speakers.json")
         self._id_cache = {}
+        self.scan_rows = None  # cached per-row scan descriptors (see scan_index)
         # path -> Store index for atomic saves
         self._paths = {
             "translations.json": repo_file("translations.json"),
@@ -97,6 +98,25 @@ class Store:
             return {}
         with open(p, encoding="utf-8") as fh:
             return json.load(fh)
+
+    def scan_index(self):
+        """Return the per-row :class:`ScanRow` list, building it on first use.
+
+        Every row of every table gets one descriptor with the normalized
+        search keys precomputed, so a table refresh filters plain strings
+        instead of re-running ``_norm_key`` / ``tr_state`` / dict lookups for
+        the whole store on every keypress. The store's caches (id -> EN,
+        tuned times) are immutable for a session, so the index only needs
+        rebuilding after a save mutates the authoring data (the caller sets
+        ``scan_rows = None`` at the same point it invalidates ``_dup_sync``).
+        """
+        if self.scan_rows is None:
+            rows = []
+            for file, table in self.tables.items():
+                for idx, (key, vn) in enumerate(table.items()):
+                    rows.append(ScanRow(self, file, key, vn, idx))
+            self.scan_rows = rows
+        return self.scan_rows
 
     # -- id / speaker resolution ------------------------------------------
 
@@ -329,10 +349,26 @@ class ScanItem:
 
     Used by the editor only (never escaped to disk). Markers/player_pos are
     resolved lazily via :meth:`materialize` when an item is actually opened,
-    so a full-text table scan stays cheap.
+    so a full-text table scan stays cheap. ``en_norm`` / ``vn_norm`` /
+    ``ids_low`` are precomputed search keys (populated from a
+    :class:`ScanRow`); when present, :func:`search_hit` matches against them
+    directly instead of re-normalizing every row.
     """
 
-    __slots__ = ("en", "file", "ids", "key", "speaker", "subid", "vn")
+    __slots__ = (
+        "en",
+        "en_norm",
+        "file",
+        "has_times",
+        "ids",
+        "ids_low",
+        "key",
+        "speaker",
+        "subid",
+        "tr",
+        "vn",
+        "vn_norm",
+    )
 
     def __init__(self, store, file, key, vn):
         self.file = file
@@ -342,10 +378,56 @@ class ScanItem:
         self.ids = [rid] if rid else []
         self.en = store.id_text_map(file).get(key, "")
         self.speaker = store.speaker_label(self.ids)
+        self.en_norm = None
+        self.vn_norm = None
+        self.ids_low = None
+        self.has_times = None
+        self.tr = None
 
     def materialize(self, store):
         """Promote to a full :class:`Item` (loads markers for one row)."""
         return Item(store, self.file, self.key, self.vn)
+
+
+class ScanRow:
+    """Precomputed search/render fields for one table row.
+
+    Built once per store (:meth:`Store.scan_index`) and reused across table
+    refreshes, so filtering reads plain normalized strings instead of
+    re-normalizing the whole store on every keypress. The store's caches are
+    immutable for a session, so the index only needs rebuilding after a save
+    mutates the authoring data.
+    """
+
+    __slots__ = (
+        "en_norm",
+        "file",
+        "has_times",
+        "ids_low",
+        "idx",
+        "key",
+        "rid",
+        "speaker_low",
+        "tr",
+        "vn",
+        "vn_norm",
+    )
+
+    def __init__(self, store, file, key, vn, idx):
+        self.file = file
+        self.key = key
+        self.vn = vn
+        self.idx = idx
+        rid, _sub = split_key(key)
+        self.rid = rid
+        self.ids_low = [rid.lower()] if rid else []
+        en = store.id_text_map(file).get(key, "")
+        self.en_norm = _norm_key(en)
+        self.vn_norm = _norm_key(vn)
+        self.speaker_low = (store.speaker_label([rid]) or "").lower() if rid else ""
+        self.tr = tr_state(vn)
+        self.has_times = bool(
+            tuned_times_index(store).get(file[:-len(".msg")], {}).get(rid))
 
 
 def iter_scan(store, bases=None):
@@ -580,7 +662,7 @@ VN_MAP = {
 _VN_RE = re.compile("|".join(sorted(VN_MAP, key=len, reverse=True)))
 
 
-@functools.lru_cache(maxsize=16384)
+@functools.lru_cache(maxsize=1 << 18)
 def _norm_key(s):
     """Lowercase, collapse whitespace and normalize Vietnamese tone mark
     placement (``uy/oe/oa``) to the new-style second-vowel form.
@@ -621,20 +703,29 @@ def search_hit(store, item, query):
     ``*`` and ``?`` act as wildcards (any run / any single character);
     otherwise the match is a plain substring test. Whitespace is normalised on
     both sides (``\\n`` treated like a space) and Vietnamese tone placement is
-    normalised to the new-style form, so ``huỷ`` matches ``hủy``.
+    normalised to the new-style form, so ``huỷ`` matches ``hủy``. Rows scanned
+    from a :class:`ScanRow` carry precomputed normalized keys; anything else
+    falls back to on-the-fly normalization.
     """
     if not query:
         return True
     if _WILDCARD_RE.search(query):
         rx = _wildcard_regex(_norm_key(query))
-        en = _norm_key(item.en)
-        vn = _norm_key(item.vn)
-        return bool(rx.search(en) or rx.search(vn)
-                    or any(rx.search(rid) for rid in item.ids))
+        en = item.en_norm if item.en_norm is not None else _norm_key(item.en)
+        vn = item.vn_norm if item.vn_norm is not None else _norm_key(item.vn)
+        ids = item.ids_low if item.ids_low is not None else None
+        if ids is None:
+            ids = [rid.lower() for rid in item.ids]
+        return bool(rx.search(en) or rx.search(vn) or any(rx.search(r) for r in ids))
     q = _norm_key(query)
-    if q in _norm_key(item.en) or q in _norm_key(item.vn):
+    if q in (item.en_norm if item.en_norm is not None else _norm_key(item.en)):
         return True
-    return any(q in rid.lower() for rid in item.ids)
+    if q in (item.vn_norm if item.vn_norm is not None else _norm_key(item.vn)):
+        return True
+    ids = item.ids_low if item.ids_low is not None else None
+    if ids is None:
+        return any(q in rid.lower() for rid in item.ids)
+    return any(q in r for r in ids)
 
 
 def matches(store, item, query):
