@@ -70,11 +70,70 @@ KEY_TAGS = {
 # Loading
 # --------------------------------------------------------------------------
 
+# Cache file storing the extracted EN id->text maps so a second editor boot
+# (or any tool that builds the scan index) can skip the LZ4 + msgpack decode
+# that dominates the build. Lives in the repo's writable ``data/`` dir and is
+# keyed by the game install path; see ``scripts/bench_scan_cache.py``.
+SCAN_CACHE_REL = os.path.join("data", ".scan_index.cache.json")
+
+
+class ScanCache:
+    """Persistent store of extracted EN id->text maps, keyed by digest.
+
+    Each :meth:`Store.id_text_map` result is derived from one game archive
+    chunk; the digest (:func:`extract.chunk_digest`) is an xxh64 of the
+    still-compressed chunk bytes, so a cached map can be trusted after one
+    cheap file read + hash instead of re-running the decompress/decode
+    pipeline. Layout: ``{file: {"digest": int, "id_text": {key: en_text}}}``
+    plus the absolute game dir (a different install must not reuse maps).
+    """
+
+    VERSION = 1
+
+    def __init__(self, path=None, game_dir=None):
+        self.path = path or os.path.join(os.path.dirname(_HERE), SCAN_CACHE_REL)
+        self.game_dir = os.path.realpath(game_dir) if game_dir else ""
+        self.tables = {}
+        self._dirty = False
+        self._load()
+
+    def _load(self):
+        try:
+            with open(self.path, encoding="utf-8") as fh:
+                data = json.load(fh)
+        except (OSError, ValueError):
+            return
+        if data.get("version") != self.VERSION or \
+                data.get("game_dir") != self.game_dir:
+            return
+        self.tables = data.get("tables", {})
+
+    def get(self, file, digest):
+        ent = self.tables.get(file)
+        if ent is not None and ent.get("digest") == digest:
+            return ent.get("id_text")
+        return None
+
+    def put(self, file, digest, id_text):
+        self.tables[file] = {"digest": digest, "id_text": id_text}
+        self._dirty = True
+
+    def save(self):
+        if not self._dirty:
+            return
+        payload = {"version": self.VERSION, "game_dir": self.game_dir,
+                   "tables": self.tables}
+        tmp = self.path + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh, ensure_ascii=False, separators=(",", ":"))
+        os.replace(tmp, self.path)
+        self._dirty = False
+
 
 class Store:
     """Handles the three authoring JSONs and, optionally, the game archive."""
 
-    def __init__(self, game_dir=None):
+    def __init__(self, game_dir=None, use_cache=True, cache_path=None):
         self.game = game_dir
         self.translations = load_translations()
         self.tables = self.translations.get("translations", {})
@@ -84,6 +143,14 @@ class Store:
         self.speakers = self._load_json("data/scenario_speakers.json")
         self._id_cache = {}
         self.scan_rows = None  # cached per-row scan descriptors (see scan_index)
+        # Persistent EN-map cache (skips the game LZ4+decode on the next boot);
+        # only active when a game dir is supplied. ``cache_hits`` /
+        # ``cache_misses`` / ``cache_served`` let a caller report the result.
+        self.cache = ScanCache(path=cache_path, game_dir=game_dir) \
+            if (game_dir and use_cache) else None
+        self._cache_served = set()  # tables whose map this session hit the cache
+        self.cache_hits = 0
+        self.cache_misses = 0
         # path -> Store index for atomic saves
         self._paths = {
             "translations.json": repo_file("translations.json"),
@@ -114,10 +181,14 @@ class Store:
         size)`` invoked once per phase per table while the index is being
         built, so a UI can report what the build is doing. ``phase`` is
         ``"extract"`` (the English reference table is being pulled from the
-        game install), ``"normalize"`` (the row keys are being normalized) or
-        ``"done"`` (the table finished); ``done`` counts the rows processed
-        so far (before ``"done"``, including the current table after it) and
-        ``size`` is the number of rows in the current table.
+        game install), ``"cache"`` (it came from the persistent
+        :class:`ScanCache` instead), ``"normalize"`` (the row keys are being
+        normalized) or ``"done"`` (the table finished); ``done`` counts the
+        rows processed so far (before ``"done"``, including the current table
+        after it) and ``size`` is the number of rows in the current table.
+
+        A cache-enabled store persists the freshly extracted maps (one digest
+        per table) before returning, so the next boot is the fast path.
         """
         if self.scan_rows is None:
             total = sum(len(t) for t in self.tables.values()) if progress else 0
@@ -127,14 +198,18 @@ class Store:
                 size = len(table)
                 if progress:
                     progress(file, done, total, "extract", size)
-                    self.id_text_map(file)
-                    progress(file, done, total, "normalize", size)
+                self.id_text_map(file)
+                if progress:
+                    phase = "cache" if file in self._cache_served else "normalize"
+                    progress(file, done, total, phase, size)
                 for idx, (key, vn) in enumerate(table.items()):
                     rows.append(ScanRow(self, file, key, vn, idx))
                 done += size
                 if progress:
                     progress(file, done, total, "done", size)
             self.scan_rows = rows
+            if self.cache is not None:
+                self.cache.save()
         return self.scan_rows
 
     # -- id / speaker resolution ------------------------------------------
@@ -146,6 +221,11 @@ class Store:
         ``id_hash_::subid_hash_`` when the id is split across rows. This is
         the forward map that resolves a stored row id back to its English
         text for preview/search when a game dir is supplied.
+
+        With a :class:`ScanCache`, the map is first looked up by the digest
+        of the game chunk it was extracted from: on a hit the LZ4 + msgpack
+        decode is skipped entirely, and on a miss the fresh map is persisted
+        for the next boot.
         """
         if file in self._id_cache:
             return self._id_cache[file]
@@ -154,6 +234,17 @@ class Store:
             return {}
         kind = "scenario" if file.startswith("text_scenario") else "text"
         rel = f"system/table/{kind}/en/{file}"
+        digest = None
+        if self.cache is not None:
+            digest = self._chunk_digest(rel)
+            if digest is not None:
+                cached = self.cache.get(file, digest)
+                if cached is not None:
+                    self.cache_hits += 1
+                    self._cache_served.add(file)
+                    self._id_cache[file] = cached
+                    return cached
+                self.cache_misses += 1
         raw = self._extract(rel)
         m = {}
         if raw:
@@ -168,6 +259,8 @@ class Store:
                 if tx and key:
                     m[key] = tx
         self._id_cache[file] = m
+        if self.cache is not None and digest is not None:
+            self.cache.put(file, digest, m)
         return m
 
     def _extract(self, rel):
@@ -177,7 +270,26 @@ class Store:
             from extract import extract
         except ImportError:
             return None
-        return extract(self.game, rel)
+        return extract(self.game, rel, self._index_bytes())
+
+    def _index_bytes(self):
+        """data.i bytes, read once per session (shared by extract/digest)."""
+        if getattr(self, "_datai", None) is None:
+            self._datai = None
+            if self.game:
+                p = os.path.join(self.game, "data.i")
+                if os.path.isfile(p):
+                    with open(p, "rb") as fh:
+                        self._datai = fh.read()
+        return self._datai
+
+    def _chunk_digest(self, rel):
+        """xxh64 of the compressed game chunk for ``rel`` (None unavailable)."""
+        try:
+            from extract import chunk_digest
+        except ImportError:
+            return None
+        return chunk_digest(self.game, rel, self._index_bytes())
 
     def ja_text(self, file, ids):
         """Return the original Japanese text for the first matching id.

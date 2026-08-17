@@ -15,3 +15,6 @@ archive/
 
 # translation normalize backups
 *.bak
+
+# runtime scan-index cache
+/data/.scan_index.cache.json

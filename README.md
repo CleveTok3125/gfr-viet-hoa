@@ -116,6 +116,15 @@ index range and `--speaker "<name>"` the speaker box (any combination works).
 
 The full editor key reference is in [`CONTRIBUTING.md`](#maintainer-docs).
 
+**Fast relaunch.** The first editor boot with a game dir builds a search
+index by extracting every English table from the game (about a second). The
+extracted tables are persisted to `data/.scan_index.cache.json` (keyed by the
+install path plus an xxh64 of the source archive chunks), so the next boot
+skips the extraction and feels instant; the cache is rebuilt automatically
+whenever the game files change. `python3 scripts/bench_scan_cache.py
+[GAME_DIR]` benchmarks the cold (no cache) vs warm (cached) paths side by
+side.
+
 **Supported builds:** the table is maintained for the latest game build. On an
 *older* build the patch is still safe: it prints a `Build check: WARNING`, and
 patches only the strings that match the table while leaving everything else

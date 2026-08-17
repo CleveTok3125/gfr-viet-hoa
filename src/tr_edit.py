@@ -1011,6 +1011,10 @@ class TrEditApp(App):
             self._set_build_status(
                 f"Index: extracting EN {file[:-4]} ({size:,} rows) · "
                 f"{done:,}/{total:,}")
+        elif phase == "cache":
+            self._set_build_status(
+                f"Index: cached {file[:-4]} ({size:,} rows) · "
+                f"{done:,}/{total:,}")
         elif phase == "normalize":
             self._set_build_status(
                 f"Index: normalizing {file[:-4]} ({size:,} rows) · "

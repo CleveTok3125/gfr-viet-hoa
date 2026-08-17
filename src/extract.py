@@ -29,38 +29,65 @@ def find_archive_index(root, target):
     return None
 
 
-def extract(game_dir, path, index_bytes=None):
-    """Return file bytes for `path` (internal, no 'data/' prefix), or None.
-
-    Pass `index_bytes` (the raw bytes of data.i) to avoid re-reading the
-    index file on every call.
-    """
+def _locate(game_dir, path, index_bytes=None):
+    """Resolve `path` to its archive chunk; return (dfn, foff, zsize, usize,
+    off, fsz) or None when the path is not in the archive."""
     if index_bytes is None:
         index_path = os.path.join(game_dir, "data.i")
         with open(index_path, "rb") as fh:
-            buf = fh.read()
-    else:
-        buf = index_bytes
-    root = IndexFile.IndexFile.GetRootAs(buf, 0)
+            index_bytes = fh.read()
+    root = IndexFile.IndexFile.GetRootAs(index_bytes, 0)
 
     target = xxh64(path)
     idx = find_archive_index(root, target)
     if idx is None:
         return None
 
-    vfileidx = vec_data(buf, root, 12)   # FileToChunkIndexers, stride 12
-    vchunk = vec_data(buf, root, 14)     # Chunks, stride 24
+    vfileidx = vec_data(index_bytes, root, 12)   # FileToChunkIndexers, stride 12
+    vchunk = vec_data(index_bytes, root, 14)     # Chunks, stride 24
 
-    ci = struct.unpack('<i', buf[vfileidx + idx * 12: vfileidx + idx * 12 + 4])[0]
-    fsz = struct.unpack('<I', buf[vfileidx + idx * 12 + 4: vfileidx + idx * 12 + 8])[0]
-    off = struct.unpack('<I', buf[vfileidx + idx * 12 + 8: vfileidx + idx * 12 + 12])[0]
-    foff = struct.unpack('<Q', buf[vchunk + ci * 24: vchunk + ci * 24 + 8])[0]
-    zsize = struct.unpack('<I', buf[vchunk + ci * 24 + 8: vchunk + ci * 24 + 12])[0]
-    usize = struct.unpack('<I', buf[vchunk + ci * 24 + 12: vchunk + ci * 24 + 16])[0]
-    dfn = buf[vchunk + ci * 24 + 22]
+    ci = struct.unpack('<i', index_bytes[vfileidx + idx * 12: vfileidx + idx * 12 + 4])[0]
+    fsz = struct.unpack('<I', index_bytes[vfileidx + idx * 12 + 4: vfileidx + idx * 12 + 8])[0]
+    off = struct.unpack('<I', index_bytes[vfileidx + idx * 12 + 8: vfileidx + idx * 12 + 12])[0]
+    foff = struct.unpack('<Q', index_bytes[vchunk + ci * 24: vchunk + ci * 24 + 8])[0]
+    zsize = struct.unpack('<I', index_bytes[vchunk + ci * 24 + 8: vchunk + ci * 24 + 12])[0]
+    usize = struct.unpack('<I', index_bytes[vchunk + ci * 24 + 12: vchunk + ci * 24 + 16])[0]
+    dfn = index_bytes[vchunk + ci * 24 + 22]
+    return dfn, foff, zsize, usize, off, fsz
 
+
+def extract(game_dir, path, index_bytes=None):
+    """Return file bytes for `path` (internal, no 'data/' prefix), or None.
+
+    Pass `index_bytes` (the raw bytes of data.i) to avoid re-reading the
+    index file on every call.
+    """
+    loc = _locate(game_dir, path, index_bytes)
+    if loc is None:
+        return None
+    dfn, foff, zsize, usize, off, fsz = loc
     with open(os.path.join(game_dir, f"data.{dfn}"), "rb") as f:
         f.seek(foff)
         raw = f.read(zsize)
     data = _lz4_decompress(raw, usize) if zsize != usize else raw
     return data[off:off + fsz]
+
+
+def chunk_digest(game_dir, path, index_bytes=None):
+    """xxh64 of the compressed archive chunk containing `path`, or None.
+
+    The digest is computed over the raw (still-compressed) chunk bytes, so
+    verifying a cached extraction result costs a file read plus one xxh64
+    (compiled: GB/s) instead of an LZ4 decompress + msgpack decode. Any file
+    sharing the chunk invalidates together with `path`; that only makes the
+    cache conservatively miss, never return stale data.
+    """
+    from deps.xxh64 import digest as _digest
+
+    loc = _locate(game_dir, path, index_bytes)
+    if loc is None:
+        return None
+    dfn, foff, zsize, _, _, _ = loc
+    with open(os.path.join(game_dir, f"data.{dfn}"), "rb") as f:
+        f.seek(foff)
+        return _digest(f.read(zsize))
