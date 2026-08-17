@@ -50,6 +50,17 @@
   search box keeps only the untranslated rows (`?` / `EN`) and combines with
   any other words in the query (still matching EN/VN/ID), so a sweep like
   `@untr gran` lands on the untranslated rows mentioning "gran".
+- **Editor: faster filtering + a hint-line build report.** The per-row
+  search keys (normalized EN/VN, lowered ids, speaker, translation/times
+  state) are precomputed once per session (`Store.scan_index`) instead of
+  re-derived on every keypress, cutting a search keystroke from ~600 ms to
+  ~40 ms. The one-time (or post-save) index build runs in a worker thread so
+  the window stays fully responsive (the table simply fills in when it is
+  done); the hint line (middle-left, above the legend) reports what the
+  build is doing — which English table is being extracted/normalized and the
+  row count — on the first boot and, after a ~1 s debounce, on rebuilds
+  while editing. Shortcut reminders no longer repeat in the header and the
+  hint line; key hints live in the footer bar and the legend panel.
 - **Repo layout: tools moved into `scripts/`.** The standalone command-line
   tools now live under `scripts/` (`python3 scripts/<name>.py`): `apply_diff`,
   `updater`, `rebuild_translations`, `update_filelist`,
