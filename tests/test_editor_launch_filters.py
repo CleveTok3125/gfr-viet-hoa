@@ -15,7 +15,7 @@ for p in (ROOT, os.path.join(ROOT, "src"), os.path.join(ROOT, "vendor")):
     if p not in sys.path:
         sys.path.insert(0, p)
 
-from textual.widgets import DataTable, Input
+from textual.widgets import DataTable, Input, Static
 
 from tr_edit import TrEditApp
 
@@ -57,6 +57,75 @@ class LaunchFiltersTest(unittest.IsolatedAsyncioTestCase):
             self.assertIn("SNT_WD720020_0320", row[2])
             self.assertEqual(app.current_key,
                              ("text_scenario_720.msg", "SNT_WD720020_0320"))
+
+    async def test_scan_build_status_reports_then_populates(self):
+        app = TrEditApp()
+        async with app.run_test() as pilot:
+            # first-boot path: _start_scan_build reports on the hint line right
+            # away, runs the (threaded) index build, then repopulates the
+            # table and restores the item summary.
+            app.store.scan_rows = None
+            app._scan_booted = False
+            app._start_scan_build()
+            status = app.query_one("#hint", Static)
+            self.assertTrue(str(status.content).startswith("Building"))
+            seen_progress = False
+            for _ in range(60):
+                await pilot.pause(0.02)
+                text = str(status.content)
+                seen_progress = seen_progress or "extracting" in text \
+                    or "normalizing" in text
+                if app.store.scan_rows is not None:
+                    break
+            self.assertTrue(seen_progress,
+                            "hint never reported what the build does")
+            for _ in range(60):
+                await pilot.pause(0.02)
+                if app.store.scan_rows is not None \
+                        and "item(s)" in str(status.content):
+                    break
+            self.assertIn("item(s)", str(status.content))
+            self.assertGreater(app.query_one("#table", DataTable).row_count, 0)
+
+    async def test_scan_build_debounce_skips_fast_rebuild(self):
+        app = TrEditApp()
+        async with app.run_test() as pilot:
+            # a post-save rebuild with a long debounce finishes before the
+            # timer fires, so the hint never reports the build.
+            app.store.scan_rows = None
+            app._scan_booted = True
+            app._start_scan_build(delay=5.0)
+            status = app.query_one("#hint", Static)
+            self.assertNotIn("Building", str(status.content))
+            for _ in range(60):
+                await pilot.pause(0.02)
+                self.assertNotIn("Building", str(status.content))
+                if app.store.scan_rows is not None:
+                    break
+            self.assertGreater(app.query_one("#table", DataTable).row_count, 0)
+
+    async def test_scan_build_debounce_reports_while_still_running(self):
+        app = TrEditApp()
+        async with app.run_test() as pilot:
+            # with a short debounce the timer arms the hint while the build is
+            # still running, then the finished build restores the summary.
+            app.store.scan_rows = None
+            app._scan_booted = True
+            app._start_scan_build(delay=0.01)
+            status = app.query_one("#hint", Static)
+            self.assertNotIn("Building", str(status.content))
+            for _ in range(60):
+                await pilot.pause(0.02)
+                if str(status.content).startswith("Building"):
+                    break
+            self.assertTrue(str(status.content).startswith("Building"))
+            for _ in range(60):
+                await pilot.pause(0.02)
+                if app.store.scan_rows is not None \
+                        and "item(s)" in str(status.content):
+                    break
+            self.assertIn("item(s)", str(status.content))
+            self.assertGreater(app.query_one("#table", DataTable).row_count, 0)
 
 
 if __name__ == "__main__":

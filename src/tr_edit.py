@@ -31,6 +31,7 @@ Keys:
 from __future__ import annotations
 
 import argparse
+import asyncio
 import os
 import re
 import sys
@@ -45,6 +46,7 @@ from textual import on
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 from textual.containers import Horizontal, ScrollableContainer, Vertical
+from textual.dom import NoMatches
 from textual.message import Message
 from textual.suggester import Suggester
 from textual.widgets import (
@@ -87,6 +89,11 @@ from tr_edit_core import (
 
 MAX_ROWS = 3000
 CONTEXT_MARGIN = 15
+
+# A scan-index rebuild triggered while editing (after a save) only reports on
+# the hint line if it is still running after this long; the first boot reports
+# unconditionally.
+SCAN_REBUILD_DEBOUNCE = 1.0
 
 LEGEND = (
     "[b]Marker legend[/b]\n"
@@ -541,7 +548,7 @@ class TrEditApp(App):
     """Browse and edit translation items with inline markers."""
 
     TITLE = "Translation Editor"
-    SUB_TITLE = "text + markers  |  Ctrl+S save, Ctrl+R reset"
+    SUB_TITLE = "text + markers"
 
     CSS = """
     .filters {
@@ -843,6 +850,9 @@ class TrEditApp(App):
         self.current_item = None   # Item currently in the editor
         self.dup_group = None      # duplicate group of the current item (or None)
         self._dup_sync = None      # cached {(file, key): synced} for group members
+        self._scan_building = False  # a scan-index build worker is in flight
+        self._scan_booted = False    # the index has been built at least once
+        self._build_shown = False    # the hint line reports the build
         self._hover_key = None     # (file, key) of the row under the mouse
         self.dirty = False
         self._loaded = None        # last programmatic editor text
@@ -923,7 +933,105 @@ class TrEditApp(App):
             self._dup_sync = sync
         return self._dup_sync
 
+    def _start_scan_build(self, keep_key=None, delay=None) -> None:
+        """Build the precomputed scan index while the UI stays responsive.
+
+        Runs the (potentially multi-second) normalization + English-table
+        extraction in a worker thread; the hint line (middle-left) reports
+        what the build is doing, and when done the table is repopulated
+        through ``refresh_table`` with the same caller intent. Headless runs
+        (tests) build synchronously instead, so they see the populated table
+        right after mount.
+
+        ``delay`` controls when the hint starts reporting: right away (first
+        boot: ``0``) or only if the build outlives a debounce (rebuilds while
+        editing, default ``SCAN_REBUILD_DEBOUNCE``). With a debounce the hint
+        is armed by a timer only while the build is still running, so a fast
+        rebuild never flashes it.
+        """
+        if self._scan_building:
+            return
+        self._scan_building = True
+        if delay is None:
+            delay = 0 if not self._scan_booted else SCAN_REBUILD_DEBOUNCE
+
+        def _show() -> None:
+            if self._scan_building:
+                self._build_shown = True
+                self._set_build_status("Building search index…")
+
+        if delay:
+            self.set_timer(delay, _show)
+        else:
+            _show()
+
+        def _progress(file, done, total, phase, size) -> None:
+            try:
+                self.call_from_thread(self._build_status_progress, file, done,
+                                      total, phase, size)
+            except RuntimeError:  # app shutting down mid-build
+                pass
+
+        async def _build() -> None:
+            try:
+                await asyncio.to_thread(self.store.scan_index, _progress)
+                self._scan_booted = True
+            except Exception as e:  # noqa: BLE001 - keep the editor alive
+                self.store.scan_rows = []
+                self.notify(f"Search index build failed: {e}",
+                            severity="error")
+            finally:
+                self._scan_building = False
+                self._build_shown = False
+            self._set_build_status("")
+            self.refresh_table(keep_key)
+
+        self.run_worker(_build(), name="scan-index-build")
+
+    def _set_build_status(self, text: str) -> None:
+        """Show/clear the hint line (main-thread calls only).
+
+        The hint line (middle-left, above the legend) carries either the item
+        summary or, while the scan index is being built, the build progress.
+        """
+        try:
+            self.query_one("#hint", Static).update(text)
+        except NoMatches:  # app is tearing down; nothing to update
+            pass
+
+    def _build_status_progress(self, file, done, total, phase, size) -> None:
+        """Report a scan-index build step on the hint line (main thread).
+
+        Runs on the app's event loop via ``call_from_thread`` from the build
+        worker; a no-op while the debounced hint has not (yet) been armed.
+        """
+        if not self._build_shown:
+            return
+        if phase == "extract":
+            self._set_build_status(
+                f"Index: extracting EN {file[:-4]} ({size:,} rows) · "
+                f"{done:,}/{total:,}")
+        elif phase == "normalize":
+            self._set_build_status(
+                f"Index: normalizing {file[:-4]} ({size:,} rows) · "
+                f"{done:,}/{total:,}")
+        else:
+            self._set_build_status(f"Index: {done:,}/{total:,} rows")
+
     def refresh_table(self, keep_key=None) -> None:
+        if not self.is_running:
+            return
+        # The scan index may need a one-time (or post-save) rebuild; in an
+        # interactive session that happens in a worker thread with the hint
+        # line reporting progress, so the window stays responsive and the
+        # table populates when the build completes.
+        if self.store.scan_rows is None:
+            if self.is_headless:
+                self.store.scan_index()
+                self._scan_booted = True
+            else:
+                self._start_scan_build(keep_key)
+                return
         store, base = self.store, self.base
         q = self.query_one("#search", Input).value.strip()
         q_id = self.query_one("#id", Input).value.strip().lower()
@@ -1110,13 +1218,16 @@ class TrEditApp(App):
                for p in self.query_one("#search", Input).value.strip().split()):
             scope += " · untranslated"
         self.query_one("#hint", Static).update(
-            f"{n} item(s) · {scope} {rng}".strip() + " · "
-            "Ctrl+S save · Ctrl+R reset · Ctrl+F search · F4 EN · F3 wrap")
+            f"{n} item(s) · {scope} {rng}".strip())
 
     # -- selection / editor ------------------------------------------------
 
     @on(DataTable.RowHighlighted)
     def on_row(self, event: DataTable.RowHighlighted) -> None:
+        # A RowHighlighted can be queued while the app is tearing down; the
+        # table query below is only valid while the main screen is active.
+        if not self.screen_stack or self.screen is not self.screen_stack[0]:
+            return
         table = self.query_one("#table", DataTable)
         if event.row_key is None or event.row_key.value is None:
             return
@@ -1150,8 +1261,12 @@ class TrEditApp(App):
         """Transient full-info preview of the row under the mouse pointer.
 
         Only the preview panel is touched (the editor / current_item stay put);
-        leaving the table restores the loaded item's preview.
+        leaving the table restores the loaded item's preview. Ignored while
+        the app is tearing down, since a queued hover would resolve against a
+        partial DOM.
         """
+        if not self.screen_stack or self.screen is not self.screen_stack[0]:
+            return
         table = self.query_one("#table", DataTable)
         if event.row is None or event.row < 0 or event.row >= table.row_count:
             if self.current_item is not None:
@@ -1537,7 +1652,10 @@ class TrEditApp(App):
         self.update_editor_stats()
 
     def update_editor_stats(self) -> None:
-        editor = self.query_one("#editor", TextArea)
+        try:
+            editor = self.query_one("#editor", TextArea)
+        except NoMatches:  # app is tearing down; nothing to update
+            return
         text = editor.text
         words = len(text.split())
         chars = len(text)

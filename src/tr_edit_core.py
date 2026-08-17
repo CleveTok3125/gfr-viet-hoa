@@ -99,7 +99,7 @@ class Store:
         with open(p, encoding="utf-8") as fh:
             return json.load(fh)
 
-    def scan_index(self):
+    def scan_index(self, progress=None):
         """Return the per-row :class:`ScanRow` list, building it on first use.
 
         Every row of every table gets one descriptor with the normalized
@@ -109,12 +109,31 @@ class Store:
         tuned times) are immutable for a session, so the index only needs
         rebuilding after a save mutates the authoring data (the caller sets
         ``scan_rows = None`` at the same point it invalidates ``_dup_sync``).
+
+        ``progress`` is an optional ``callable(file, done, total, phase,
+        size)`` invoked once per phase per table while the index is being
+        built, so a UI can report what the build is doing. ``phase`` is
+        ``"extract"`` (the English reference table is being pulled from the
+        game install), ``"normalize"`` (the row keys are being normalized) or
+        ``"done"`` (the table finished); ``done`` counts the rows processed
+        so far (before ``"done"``, including the current table after it) and
+        ``size`` is the number of rows in the current table.
         """
         if self.scan_rows is None:
+            total = sum(len(t) for t in self.tables.values()) if progress else 0
+            done = 0
             rows = []
             for file, table in self.tables.items():
+                size = len(table)
+                if progress:
+                    progress(file, done, total, "extract", size)
+                    self.id_text_map(file)
+                    progress(file, done, total, "normalize", size)
                 for idx, (key, vn) in enumerate(table.items()):
                     rows.append(ScanRow(self, file, key, vn, idx))
+                done += size
+                if progress:
+                    progress(file, done, total, "done", size)
             self.scan_rows = rows
         return self.scan_rows
 

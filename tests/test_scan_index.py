@@ -53,6 +53,31 @@ class ScanIndexTest(unittest.TestCase):
                 fast = [r for r in self._scan(self.store, q, precomputed=True)]
                 self.assertEqual(fast, lazy)
 
+    def test_progress_callback_reports_every_phase(self):
+        store = Store()
+        events = []
+
+        def progress(file, done, total, phase, size):
+            events.append((file, done, total, phase, size))
+
+        store.scan_index(progress)
+        files = list(store.tables)
+        self.assertEqual(len(events), 3 * len(files))
+        total = sum(len(t) for t in store.tables.values())
+        for i, (file, done, t, phase, size) in enumerate(events):
+            self.assertEqual(t, total)
+            self.assertEqual(size, len(store.tables[file]))
+            if phase == "extract":
+                self.assertEqual(done, sum(len(store.tables[f])
+                                           for f in files[:i // 3]))
+                self.assertEqual(events[i + 1][3], "normalize")
+                self.assertEqual(events[i + 2][3], "done")
+            elif phase == "done":
+                self.assertEqual(done, sum(len(store.tables[f])
+                                           for f in files[:i // 3 + 1]))
+        self.assertEqual(events[-1][1], total)
+        self.assertEqual(events[-1][3], "done")
+
     def _scan(self, store, q, precomputed):
         parts = q.split()
         untr_only = any(p.lower() == "@untr" for p in parts)
