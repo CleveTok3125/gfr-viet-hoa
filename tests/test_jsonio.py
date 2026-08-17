@@ -12,6 +12,7 @@ import json
 import os
 import sys
 import unittest
+from typing import ClassVar
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 for p in (ROOT, os.path.join(ROOT, "src")):
@@ -101,6 +102,38 @@ class JsonioFallback(unittest.TestCase):
         a = jsonio.dumps(SAMPLE, ensure_ascii=False, separators=(";", "="))
         b = json.dumps(SAMPLE, ensure_ascii=False, separators=(";", "="))
         self.assertEqual(a, b)
+
+
+class JsonioCommittedFiles(unittest.TestCase):
+    """The authoring JSONs are byte-stable under the save path.
+
+    Re-dumping any committed file with the project's writer combination
+    (``ensure_ascii=False, indent=2`` plus each file's trailing-newline
+    convention) must reproduce the committed bytes exactly — so an editor or
+    script save never produces a spurious diff.
+    """
+
+    FILES: ClassVar[list] = [
+        ("translations.json", True),
+        ("highlight_decisions.json", False),
+        ("tag_overrides.json", False),
+        ("tag_tuning.json", False),
+        ("data/scenario_speakers.json", False),
+        ("data/release_manifest.json", False),
+    ]
+
+    def test_authoring_files_reproduce_bytes(self):
+        for rel, has_nl in self.FILES:
+            path = os.path.join(ROOT, rel)
+            with self.subTest(rel=rel):
+                with open(path, "rb") as fh:
+                    raw = fh.read()
+                self.assertEqual(raw.endswith(b"\n"), has_nl, rel)
+                data = jsonio.loads(raw)
+                out = jsonio.dumps(data, ensure_ascii=False, indent=2)
+                if has_nl:
+                    out += "\n"
+                self.assertEqual(out.encode("utf-8"), raw, rel)
 
 
 if __name__ == "__main__":
