@@ -661,7 +661,7 @@ def main():
 
     overrides = {}
     if args.overrides:
-        import json
+        import jsonio as json
         with open(args.overrides, "r", encoding="utf-8") as fh:
             overrides = json.load(fh)
         print(f"loaded {len(overrides)} override file(s) from {args.overrides}")
@@ -726,9 +726,9 @@ def main():
                   + (" written" if (args.write and changed) else ""))
 
     if args.report:
-        import json
+        import jsonio as json
         with open(args.report, "w", encoding="utf-8") as fh:
-            json.dump(report, fh, ensure_ascii=False, indent=1)
+            json.dump(report, fh, ensure_ascii=False, indent=2)
         print(f"wrote {len(report)} review entries to {args.report}")
 
     if args.write and args.fix_sizes:

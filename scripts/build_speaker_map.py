@@ -13,7 +13,6 @@ Run from repo root:
     PYTHONPATH=src:vendor python3 src/build_speaker_map.py [--game <install>]
 """
 import argparse
-import json
 import os
 import sys
 
@@ -23,6 +22,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import msgpack
 
+import jsonio as json
 from common import bootstrap
 
 bootstrap()
@@ -121,7 +121,7 @@ def main():
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
         "data", "scenario_speakers.json")
     with open(out_path, "w", encoding="utf-8") as fh:
-        json.dump(speakers, fh, ensure_ascii=False, indent=1)
+        json.dump(speakers, fh, ensure_ascii=False, indent=2)
     print(f"wrote {len(speakers)} speaker entries -> {out_path}")
 
 

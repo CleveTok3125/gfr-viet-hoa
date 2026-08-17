@@ -20,7 +20,6 @@ Usage:
     python3 -m src.tag_review --game <dir> [--overrides tag_overrides.json]
 """
 import argparse
-import json
 import os
 import re
 import sys
@@ -29,6 +28,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(_HERE, ".."))
 sys.path.insert(0, os.path.join(_HERE, "..", "src"))
 
+import jsonio as json
 from common import bootstrap
 
 bootstrap()
@@ -225,7 +225,7 @@ def main():
                         written += 1
                         reviewed += 1
                         with open(args.overrides, "w", encoding="utf-8") as fh:
-                            json.dump(overrides, fh, ensure_ascii=False, indent=1)
+                            json.dump(overrides, fh, ensure_ascii=False, indent=2)
                         print(f"  -> set [{ns}:{ne}] {vn_txt[ns:ne]!r}")
                         break
                     if quit_now:
@@ -239,7 +239,7 @@ def main():
             break
 
     with open(args.overrides, "w", encoding="utf-8") as fh:
-        json.dump(overrides, fh, ensure_ascii=False, indent=1)
+        json.dump(overrides, fh, ensure_ascii=False, indent=2)
     print(f"\nDONE: {total_entries} offered, {reviewed} answered, {written} written "
           f"-> {args.overrides}")
     return 0

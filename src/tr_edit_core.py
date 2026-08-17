@@ -22,10 +22,11 @@ from __future__ import annotations
 
 import copy
 import functools
-import json
 import os
 import re
 import sys
+
+import jsonio as json
 
 _HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _HERE)
@@ -415,7 +416,7 @@ class Store:
                 has_nl = fh.read(1) == b"\n"
         tmp = p + ".tmp"
         with open(tmp, "w", encoding="utf-8") as fh:
-            json.dump(data, fh, ensure_ascii=False, indent=1)
+            json.dump(data, fh, ensure_ascii=False, indent=2)
             if has_nl:
                 fh.write("\n")
         os.replace(tmp, p)

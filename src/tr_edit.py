@@ -1805,7 +1805,7 @@ class TrEditApp(App):
     def action_copy_debug(self) -> None:
         if self.current_item is None:
             return
-        import json as _json
+        import jsonio as _json
         it = self.current_item
         store = self.store
         base = it.file[:-len(".msg")]

@@ -14,13 +14,13 @@ Exits 0 when everything matches, 1 otherwise.
 
 import argparse
 import hashlib
-import json
 import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
 
+import jsonio as json
 from common import bootstrap
 
 bootstrap()
@@ -72,7 +72,7 @@ def gen_manifest(game_dir, out=MANIFEST):
         else:
             missing.append(rel)
     with open(out, "w", encoding="utf-8") as f:
-        json.dump(manifest, f, indent=1)
+        json.dump(manifest, f, ensure_ascii=False, indent=2)
     if missing:
         print(f"WARN: missing files not hashed: {missing}")
     print(f"Wrote manifest: {out} ({len(manifest['files'])} files)")

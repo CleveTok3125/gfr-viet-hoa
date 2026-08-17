@@ -11,9 +11,10 @@ The wrapped function then reads ``meta.build_vh`` back from the file, so the
 release manifest records the same stamp.
 """
 import functools
-import json
 import os
 from datetime import datetime
+
+import jsonio as json
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -34,7 +35,7 @@ def stamp_release(func):
         table = trans["translations"].setdefault("text_ui.msg", {})
         table["TXT_TITLE_VERSION"] = f"Phiên bản {{0}} - {stamp}"
         with open(path, "w", encoding="utf-8") as fh:
-            json.dump(trans, fh, ensure_ascii=False, indent=1)
+            json.dump(trans, fh, ensure_ascii=False, indent=2)
             fh.write("\n")
         return func(*args, **kwargs)
     return wrapper

@@ -9,7 +9,6 @@ highlight_decisions.json format: (internal name stays `decisions`)
 occurrence is optional (default 0 = first match). If the phrase is not found
 in the VN text, the entry is skipped and reported.
 """
-import json
 import os
 import re
 import sys
@@ -20,6 +19,7 @@ sys.path.insert(0, os.path.join(
 
 import msgpack
 
+import jsonio as json
 from common import SCENARIO_KO, TEXT_KO, bootstrap
 
 bootstrap()
@@ -119,5 +119,5 @@ for base, rid_map in decisions.items():
                 applied += 1
 
 with open(out_path, "w", encoding="utf-8") as fh:
-    json.dump(out, fh, ensure_ascii=False, indent=1)
+    json.dump(out, fh, ensure_ascii=False, indent=2)
 print(f"applied {applied}, missed {missed} -> {out_path}")

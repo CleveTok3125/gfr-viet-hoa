@@ -27,12 +27,13 @@ Usage:
 import argparse
 import difflib
 import hashlib
-import json
 import os
 import sys
 from datetime import date
 
 import msgpack
+
+import jsonio as json
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
@@ -201,11 +202,11 @@ def main():
         meta["build_fingerprint"] = fp
     with open(out_path, "w", encoding="utf-8") as fh:
         json.dump({"meta": meta, "translations": new_trans}, fh,
-                  ensure_ascii=False, indent=1)
+                  ensure_ascii=False, indent=2)
     print(f"wrote {out_path}")
 
     with open(args.snapshot, "w", encoding="utf-8") as fh:
-        json.dump(snap_new, fh, ensure_ascii=False, indent=1)
+        json.dump(snap_new, fh, ensure_ascii=False, indent=2)
     print(f"refreshed EN snapshot {args.snapshot}")
 
 

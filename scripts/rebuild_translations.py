@@ -15,12 +15,13 @@ Usage:
 import argparse
 import collections
 import hashlib
-import json
 import os
 import sys
 
 sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
+
+import jsonio as json
 from common import bootstrap
 
 bootstrap()
@@ -142,7 +143,7 @@ def main():
         else:
             print("WARN: could not compute full build_fingerprint from", game)
     with open(args.out, "w", encoding="utf-8") as f:
-        json.dump(out, f, ensure_ascii=False, indent=1)
+        json.dump(out, f, ensure_ascii=False, indent=2)
     print("wrote", args.out)
 
 

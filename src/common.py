@@ -1,9 +1,10 @@
 """Shared helpers: vendor bootstrap, game directory detection, data loading."""
 import gzip
 import hashlib
-import json
 import os
 import sys
+
+import jsonio as json
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 VENDOR_DIR = os.path.join(REPO_ROOT, "vendor")

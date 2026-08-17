@@ -36,9 +36,10 @@ so `write_to_game` reconstructs a byte-equivalent msgpack table. Keys are
 `id_`/`subid_`; within a file these are unique (verified), so the keyed map is
 lossless. Order of entries is not significant to the game (lookup by id).
 """
-import json
 import os
 import sys
+
+import jsonio as json
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -113,7 +114,7 @@ def load(path):
 def save(path, data):
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as fh:
-        json.dump(data, fh, ensure_ascii=False, indent=1)
+        json.dump(data, fh, ensure_ascii=False, indent=2)
     os.replace(tmp, path)
 
 

@@ -26,7 +26,6 @@ Run from the repo root:
     python3 scripts/normalize_untranslated.py --write    # apply
 """
 import argparse
-import json
 import os
 import re
 import sys
@@ -36,6 +35,7 @@ for p in (REPO, os.path.join(REPO, "src"), os.path.join(REPO, "vendor")):
     if p not in sys.path:
         sys.path.insert(0, p)
 
+import jsonio as json
 from tr_edit_core import tr_state
 
 TRANS_PATH = os.path.join(REPO, "translations.json")
@@ -112,7 +112,7 @@ def main():
                 open(backup, "w", encoding="utf-8") as bh:
             bh.write(fh.read())
         with open(TRANS_PATH, "w", encoding="utf-8") as fh:
-            fh.write(json.dumps(doc, ensure_ascii=False, indent=1) + "\n")
+            fh.write(json.dumps(doc, ensure_ascii=False, indent=2) + "\n")
         print(f"wrote {TRANS_PATH}: {total} rows cleared "
               f"({total_exact} exact, {total_prose} prose; backup: {backup})")
     else:

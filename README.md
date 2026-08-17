@@ -45,7 +45,8 @@ Download this repository (GitLab **Code → Download source code** / Download
 ZIP), extract it anywhere, then run the module from inside the folder — no
 build step, no pip installs required (third-party libs ship as pure-Python
 fallbacks in `vendor/`; pip installs of the pinned builds are used when
-present and just make the hot paths faster):
+present and just make the hot paths faster — including `orjson`, which
+accelerates the JSON reads/writes via the drop-in `jsonio` alias):
 
 ```bash
 python3 -m gfrpatch                       # asks for the game folder, or:

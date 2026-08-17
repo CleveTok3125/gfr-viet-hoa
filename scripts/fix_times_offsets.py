@@ -18,13 +18,13 @@ The VN text is resolved from translations.json by stable row id
 en/ scenario+text tables (id_hash_ -> text_).
 """
 import argparse
-import json
 import os
 import sys
 
 sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
+import jsonio as json
 from common import bootstrap
 
 bootstrap()
@@ -100,7 +100,7 @@ def main():
     if args.write and total_changed:
         tmp = TUNING + ".tmp"
         with open(tmp, "w", encoding="utf-8") as fh:
-            json.dump(data, fh, ensure_ascii=False, indent=1)
+            json.dump(data, fh, ensure_ascii=False, indent=2)
         os.replace(tmp, TUNING)
         print(f"wrote {TUNING}")
     return 0
