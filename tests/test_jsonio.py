@@ -103,6 +103,13 @@ class JsonioFallback(unittest.TestCase):
         b = json.dumps(SAMPLE, ensure_ascii=False, separators=(";", "="))
         self.assertEqual(a, b)
 
+    def test_loads_bytes_in_stdlib_path(self):
+        raw = '{"a": 1, "việt": "ok"}'
+        for kwargs in ({}, {"parse_int": float}):
+            self.assertEqual(
+                jsonio.loads(raw.encode("utf-8"), **kwargs),
+                json.loads(raw, **kwargs))
+
 
 class JsonioCommittedFiles(unittest.TestCase):
     """The authoring JSONs are byte-stable under the save path.

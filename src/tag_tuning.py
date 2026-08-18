@@ -107,7 +107,7 @@ def _dir_of(game_dir, data, base):
 
 
 def load(path):
-    with open(path, "r", encoding="utf-8") as fh:
+    with open(path, "rb") as fh:
         return json.load(fh)
 
 

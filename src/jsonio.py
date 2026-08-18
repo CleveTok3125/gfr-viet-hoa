@@ -34,6 +34,8 @@ __all__ = ["dump", "dumps", "load", "loads"]
 def loads(s, **kwargs):
     if _orjson is not None and not kwargs:
         return _orjson.loads(s)
+    if isinstance(s, bytes):  # stdlib json only accepts str
+        s = s.decode("utf-8")
     return _json.loads(s, **kwargs)
 
 

@@ -62,7 +62,7 @@ def repo_file(name):
 
 
 def load_translations():
-    with open(repo_file("translations.json"), encoding="utf-8") as f:
+    with open(repo_file("translations.json"), "rb") as f:
         return json.load(f)
 
 

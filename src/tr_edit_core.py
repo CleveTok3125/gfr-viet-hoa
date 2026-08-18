@@ -106,8 +106,6 @@ class ScanCache:
             return
         try:
             payload = json.loads(data)
-        except TypeError:  # stdlib jsonio cannot parse bytes directly
-            payload = json.loads(data.decode("utf-8"))
         except (OSError, ValueError):
             return
         if payload.get("version") != self.VERSION or \
@@ -170,7 +168,7 @@ class Store:
         p = os.path.join(os.path.dirname(_HERE), rel)
         if not os.path.isfile(p):
             return {}
-        with open(p, encoding="utf-8") as fh:
+        with open(p, "rb") as fh:
             return json.load(fh)
 
     def scan_index(self, progress=None):
