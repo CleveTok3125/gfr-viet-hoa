@@ -84,7 +84,7 @@ thành, để `-` cho mục chưa làm.
 
 | Chapter (EN)                     | Chương (VI)                            | Hội thoại  | Highlight  | Voice-sync (times_)  | Glossary (gần nhất)  | Đảm bảo chất lượng  |
 |--------------------------------- |--------------------------------------- |:---------: |:---------: |:-------------------: |:-------------------: |:------------------: |
-| `Into the Conflux`               | Vào Conflux                            |     x      |     x      |          x           |          x           |          -          |
+| `Into the Conflux`               | Vào Conflux                            |     x      |     x      |          x           |          x           |          x          |
 | `Echoes of Scorn`                | Những Tiếng Vọng Khinh Miệt            |     x      |     x      |          x           |          x           |          -          |
 | `A Trial of Two Eternities`      | Thử Thách Của Hai Cõi Vĩnh Hằng        |     x      |     x      |          x           |          x           |          -          |
 | `Ragnalia, the Heralds of Doom`  | Ragnalia, Sứ Giả Của Diệt Vong         |     x      |     x      |          x           |          x           |          -          |
@@ -106,6 +106,21 @@ thành, để `-` cho mục chưa làm.
 ## TODO
 
 ### Tiếp tục
+
+```text
+FILE      : text_scenario_720.msg
+BASE      : text_scenario_720
+IDS       : SNT_VT720200_000000
+SPEAKER   : Rolan
+SPEAKERS  : {"SNT_VT720200_000000": {"chara": "NP0300", "voice": "VO_VT720200_NP0300_000000", "listener": 0, "emotion": 4, "name_ja": "ローラン", "name_en": "Rolan"}}
+EN        : "I have an important update, everyone! You can now explore\nmore of the Conflux!"
+VN (plain): "Tôi có một cập nhật quan trọng, mọi người! Giờ các bạn có thể khám\nphá nhiều hơn về Hợp Lưu!"
+COMPOUND  : "Tôi có một cập nhật quan trọng, mọi người! Giờ các bạn có thể khám\nphá nhiều hơn về Hợp Lưu!"
+HIGHLIGHTS: []
+PLAYER_POS: null
+DECISIONS : {}
+OVERRIDES : {}
+```
 
 ```text
 FILE      : text_scenario_730.msg
