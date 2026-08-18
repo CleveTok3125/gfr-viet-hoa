@@ -100,14 +100,20 @@ class ScanCache:
 
     def _load(self):
         try:
-            with open(self.path, encoding="utf-8") as fh:
-                data = json.load(fh)
+            with open(self.path, "rb") as fh:
+                data = fh.read()
+        except OSError:
+            return
+        try:
+            payload = json.loads(data)
+        except TypeError:  # stdlib jsonio cannot parse bytes directly
+            payload = json.loads(data.decode("utf-8"))
         except (OSError, ValueError):
             return
-        if data.get("version") != self.VERSION or \
-                data.get("game_dir") != self.game_dir:
+        if payload.get("version") != self.VERSION or \
+                payload.get("game_dir") != self.game_dir:
             return
-        self.tables = data.get("tables", {})
+        self.tables = payload.get("tables", {})
 
     def get(self, file, digest):
         ent = self.tables.get(file)

@@ -80,6 +80,15 @@ class ScanCacheTest(unittest.TestCase):
         cache = ScanCache(path=self.path, game_dir="/game")
         self.assertEqual(cache.tables, {})
 
+    def test_loads_legacy_plain_json(self):
+        with open(self.path, "w", encoding="utf-8") as fh:
+            json.dump({"version": 1, "game_dir": "/game",
+                       "tables": {"text_ui.msg": {"digest": DIGEST_A,
+                                                  "id_text": {"H1": "Alpha"}}}},
+                      fh)
+        cache = ScanCache(path=self.path, game_dir="/game")
+        self.assertEqual(cache.get("text_ui.msg", DIGEST_A), {"H1": "Alpha"})
+
 
 class StoreCacheTest(unittest.TestCase):
     def setUp(self):
