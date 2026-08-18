@@ -1514,7 +1514,11 @@ def apply_edit(store, item, compound):
         ov = store.overrides.setdefault(base, {}).setdefault(rid, {})
         for k in HIGHLIGHT_KEYS:
             if ren.get(k):
-                kmap = ov.setdefault(k, {})
+                # Rebuild the span map from the current phrases instead of
+                # upserting: stale indices survive an upsert when a phrase is
+                # removed or renumbered, leaving a span that points past the
+                # current text (which the game renders as swallowed chars).
+                kmap = {}
                 for idx, ph in ren[k].items():
                     s = vn.find(ph[0])
                     if s < 0:
@@ -1522,6 +1526,7 @@ def apply_edit(store, item, compound):
                             f"{rid} {k}[{idx}]: phrase {ph[0]!r} not found in text")
                         continue
                     kmap[idx] = [s, s + len(ph[0])]
+                ov[k] = kmap
             elif _tuned_spans(store, base, rid, k):
                 # The highlight exists in the tuned tags baked into the game,
                 # but the user removed it. Keep an empty entry as a tombstone
