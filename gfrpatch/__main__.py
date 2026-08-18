@@ -7,6 +7,7 @@ auto-detected candidates as a hint), so no directory guessing is needed.
 """
 import argparse
 import os
+import subprocess
 import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -52,8 +53,13 @@ def pick_game_dir(explicit):
         print(f"No data.i found under {answer!r}; try again.")
 
 
-def run_edit(game, file, search, id_, range_, speaker):
-    """Launch the TUI editor (src/tr_edit.py) as a child process."""
+def run_edit(game, file, search, id_, range_, speaker, rebuild):
+    """Launch the TUI editor (src/tr_edit.py) as a child process.
+
+    Without ``--rebuild`` the process is replaced by the editor (``execv``);
+    with it the editor runs as a child so the caller can rebuild the patch
+    once it exits. Returns the editor exit code when run as a child.
+    """
     src = os.path.join(REPO, "src", "tr_edit.py")
     cmd = [sys.executable, src]
     if game:
@@ -69,7 +75,97 @@ def run_edit(game, file, search, id_, range_, speaker):
     if speaker:
         cmd += ["--speaker", speaker]
     print("Launching editor: " + " ".join(cmd))
+    if rebuild:
+        return subprocess.call(cmd)
     return os.execv(sys.executable, cmd)
+
+
+def apply_patch(game, backup_dir=None, skip_backup=False, no_ui=False,
+                no_fix_sizes=False, force=False, rebuild=False, reapply=False):
+    """Apply the Vietnamese patch to a resolved game dir and verify it.
+
+    ``rebuild`` writes a fresh release manifest instead of hash-checking the
+    old one. ``reapply`` bypasses the already-patched guard: the caller has an
+    explicit reason to re-apply (e.g. ``edit --rebuild`` after saving rows).
+    Returns a process exit code (0 = success).
+    """
+    index = os.path.join(game, "data.i")
+    if not os.path.isfile(index):
+        print(f"No data.i under {game!r} - cannot patch.")
+        return 2
+    print(f"Game: {game}")
+
+    backup_dir = backup_dir or os.path.join(game, "vietnam_backup")
+    backup_index = os.path.join(backup_dir, "data.i")
+
+    if not skip_backup and not reapply and os.path.isfile(backup_index):
+        cur_md5 = md5_file(index)
+        bak_md5 = md5_file(backup_index)
+        if cur_md5 != bak_md5 and not force:
+            print("This install looks already patched: data.i differs from the "
+                  "backup in " + backup_dir)
+            print("  - pass --force to re-apply anyway (idempotent), or")
+            print("  - pass --restore to return the game to its pristine state.")
+            return 2
+
+    meta = load_translations()["meta"]
+    ver = game_version(os.path.join(game, "granblue_fantasy_relink.exe"))
+    expected = meta.get("build")
+    if ver:
+        if expected and ver != expected:
+            print(f"Game version: {ver} (patch built for {expected} - version mismatch)")
+        else:
+            print(f"Game version: {ver} (patch built for {expected or 'unknown'})")
+    elif expected:
+        print(f"Game version: unknown (patch built for {expected})")
+
+    ok, mismatches, checked = check_version(game)
+    if ok:
+        print(f"Build check: OK (fingerprint match on {checked} source table(s))")
+    else:
+        print(f"Build check: WARNING - this install does not match the translation "
+              f"build ({len(mismatches)} fingerprint mismatch(es)); run "
+              "scripts/updater.py to refresh.")
+
+    trans = load_translations()["translations"]
+    engine = PatchEngine(trans)
+    filelist = load_filelist()
+    overrides = {}
+    overrides_path = os.path.join(REPO, "tag_overrides.json")
+    if os.path.isfile(overrides_path):
+        import json as _json
+        with open(overrides_path, "r", encoding="utf-8") as fh:
+            overrides = _json.load(fh)
+    results = patch_install(game, index, engine, filelist,
+                            backup_dir=backup_dir,
+                            skip_backup=skip_backup,
+                            do_ui=not no_ui,
+                            do_fix_sizes=not no_fix_sizes,
+                            overrides=overrides)
+    report(results)
+
+    if results["corrupt_tables"] == 0:
+        if rebuild:
+            from verify import gen_manifest
+            gen_manifest(game)
+        else:
+            mism = verify(game)
+            if mism is None:
+                print("Note: no release manifest - run `verify.py --gen` once to "
+                      "generate data/release_manifest.json for hash verification.")
+            elif mism:
+                print(f"HASH VERIFY FAILED: {len(mism)} file(s) differ from the "
+                      "reference manifest; restore backups and re-apply.")
+                for rel, exp, got in mism:
+                    print(f"    {rel}: expected {exp[:12]}... got {got[:12]}...")
+            else:
+                print("Hash verify: OK (all files match the reference manifest).")
+
+    if results["patched"] == 0 and results["corrupt_tables"] == 0:
+        print("Nothing to patch - install already up to date.")
+    elif results["corrupt_tables"] == 0:
+        print("Done. Launch the game with language = Korean (ko).")
+    return 0
 
 
 def main():
@@ -104,19 +200,35 @@ def main():
                     help="pre-fill the index-range box, e.g. '100-120' or '100'")
     ep.add_argument("--speaker", default=None,
                     help="pre-fill the Speaker filter box")
+    ep.add_argument("--rebuild", action="store_true",
+                    help="after the editor exits, re-apply the patch and write "
+                         "a fresh release manifest (picks up saved "
+                         "translations/overrides)")
     args = ap.parse_args()
 
     if args.sub == "edit":
-        return run_edit(args.game, args.file, args.search, args.id,
-                        args.range, args.speaker)
+        rc = run_edit(args.game, args.file, args.search, args.id,
+                      args.range, args.speaker, args.rebuild)
+        if not args.rebuild:
+            sys.exit(rc)
+        # --rebuild: the editor exited, so bake the saved state into the game.
+        # Re-applying is the explicit purpose of the flag, so the already-
+        # patched guard is bypassed and a fresh manifest is written afterwards.
+        game = args.game or pick_game_dir()
+        if not game:
+            print("No game path provided; aborting.")
+            sys.exit(1)
+        sys.exit(rc or apply_patch(game, backup_dir=args.backup_dir,
+                                   no_ui=args.no_ui,
+                                   no_fix_sizes=args.no_fix_sizes,
+                                   force=args.force,
+                                   rebuild=True, reapply=True))
 
     game = pick_game_dir(args.game)
     if not game:
         print("No game path provided; aborting.")
         sys.exit(1)
     index = os.path.join(game, "data.i")
-    print(f"Game: {game}")
-
     backup_dir = args.backup_dir or os.path.join(game, "vietnam_backup")
     backup_index = os.path.join(backup_dir, "data.i")
 
@@ -140,71 +252,12 @@ def main():
         stamp = stamp_release(lambda: None)()
         print(f"Rebuild: restored to pristine state (stamp {stamp}).")
 
-    if not args.skip_backup and os.path.isfile(backup_index):
-        cur_md5 = md5_file(index)
-        bak_md5 = md5_file(backup_index)
-        if cur_md5 != bak_md5 and not args.force:
-            print("This install looks already patched: data.i differs from the "
-                  "backup in " + backup_dir)
-            print("  - pass --force to re-apply anyway (idempotent), or")
-            print("  - pass --restore to return the game to its pristine state.")
-            sys.exit(2)
-
-    meta = load_translations()["meta"]
-    ver = game_version(os.path.join(game, "granblue_fantasy_relink.exe"))
-    expected = meta.get("build")
-    if ver:
-        if expected and ver != expected:
-            print(f"Game version: {ver} (patch built for {expected} - version mismatch)")
-        else:
-            print(f"Game version: {ver} (patch built for {expected or 'unknown'})")
-    elif expected:
-        print(f"Game version: unknown (patch built for {expected})")
-
-    ok, mismatches, checked = check_version(game)
-    if ok:
-        print(f"Build check: OK (fingerprint match on {checked} source table(s))")
-    else:
-        print(f"Build check: WARNING - this install does not match the translation "
-              f"build ({len(mismatches)} fingerprint mismatch(es)); run "
-              "scripts/updater.py to refresh.")
-
-    trans = load_translations()["translations"]
-    engine = PatchEngine(trans)
-    filelist = load_filelist()
-    overrides = {}
-    overrides_path = os.path.join(REPO, "tag_overrides.json")
-    if os.path.isfile(overrides_path):
-        import json as _json
-        with open(overrides_path, "r", encoding="utf-8") as fh:
-            overrides = _json.load(fh)
-    results = patch_install(game, index, engine, filelist,
-                            backup_dir=args.backup_dir,
-                            skip_backup=args.skip_backup,
-                            do_ui=not args.no_ui,
-                            do_fix_sizes=not args.no_fix_sizes,
-                            overrides=overrides)
-    report(results)
-
-    if results["corrupt_tables"] == 0:
-        if args.rebuild:
-            from verify import gen_manifest
-            gen_manifest(game)
-        else:
-            mism = verify(game)
-            if mism is None:
-                print("Note: no release manifest - run `verify.py --gen` once to "
-                      "generate data/release_manifest.json for hash verification.")
-            elif mism:
-                print(f"HASH VERIFY FAILED: {len(mism)} file(s) differ from the "
-                      "reference manifest; restore backups and re-apply.")
-            else:
-                print("Hash verify: OK (all files match the reference manifest).")
-
-    if results["patched"] == 0 and results["corrupt_tables"] == 0:
-        print("Nothing to patch - install already up to date.")
-    elif results["corrupt_tables"] == 0:
-        print("Done. Launch the game with language = Korean (ko).")
+    sys.exit(apply_patch(game, backup_dir=backup_dir,
+                         skip_backup=args.skip_backup,
+                         no_ui=args.no_ui,
+                         no_fix_sizes=args.no_fix_sizes,
+                         force=args.force,
+                         rebuild=args.rebuild))
 
 
 if __name__ == "__main__":
