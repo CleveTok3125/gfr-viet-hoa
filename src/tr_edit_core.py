@@ -808,22 +808,90 @@ def _vn_fix(m):
     return VN_MAP[m.group(0)]
 
 
+_Y_TONE_TO_I = {"ỳ": "ì", "ý": "í", "ỷ": "ỉ", "ỹ": "ĩ", "ỵ": "ị"}
+
+# Every foldable shape contains a toned y, so strings without one skip the
+# per-syllable fold entirely via this single C-level scan.
+_YTONED_RE = re.compile("[ỳýỷỹỵ]")
+
+# nucleus-y rhymes with accepted i-variants; everything else keeps y.
+# Bare nuclei need an onset (length check in the fold function).
+_IY_BARE_FOLD = {"ỹ": "ĩ", "ỷ": "ỉ", "ỳ": "ì", "ý": "í", "ỵ": "ị"}
+# Bare nuclei whose i-form collides with a distinct word keep y; "t" also
+# covers the nonexistent tr-/th- forms.
+_IY_BARE_KEEP_ONSET = {"ỹ": "h", "ý": "t", "ỵ": "t"}
+# u + toned y folds only after the "qu" onset; elsewhere the i-form
+# collides with a distinct word or is an invalid spelling. "uỵ" never folds.
+_IY_QU_FOLD = {"uý": "uí", "uỳ": "uì", "uỹ": "uĩ"}
+_IY_CODA_FOLD = {"ỳnh": "ình"}
+# coda rhymes that fold only after "qu"; the h-forms are fixed spellings.
+_IY_CODA_QU_FOLD = {"uýt": "uít", "uỵt": "uịt"}
+
+# A y preceded by u (bare or toned) belongs to a u-led rhyme, which only
+# the "qu" fold above may touch; the bare fold must not see it.
+_U_ALL = "uùúủũụ"
+
+# y-led rhymes that always keep y, with every tone placement on the
+# following vowel.
+_Y_KEEP_RE = re.compile(r"uy[àáảãạaèéẻẽẹêềếểễệe]|y[èéẻẽẹêềếểễệe]")
+
+
+@functools.lru_cache(maxsize=1 << 15)
+def _iy_fold_word(w):
+    """Fold a nucleus y to i inside one lowercase syllable.
+
+    Only applies where y is the main vowel with an accepted i-variant.
+    Syllable-initial y, coda glides and y-led rhymes always keep y, as do
+    rhymes whose i-form collides with a distinct word.
+
+    Cached: the Vietnamese syllable inventory is small, so repeated words
+    across rows cost one dict lookup.
+    """
+    if w[0] == "y" or w[0] in _Y_TONE_TO_I:
+        return w  # syllable-initial y
+    if "y" not in w:
+        pass  # pure toned-y nuclei below need no glide/rhyme guards
+    else:
+        if w.endswith("y"):
+            return w  # coda glide, y is not the nucleus
+        if _Y_KEEP_RE.search(w):
+            return w  # y-led rhymes
+    if w[-2:] in _IY_QU_FOLD and w.startswith("qu") and len(w) > 2:
+        return w[:-2] + _IY_QU_FOLD[w[-2:]]
+    if w[-3:] in _IY_CODA_QU_FOLD and w.startswith("qu") and len(w) > 3:
+        return w[:-3] + _IY_CODA_QU_FOLD[w[-3:]]
+    if w[-3:] in _IY_CODA_FOLD and len(w) > 3:
+        return w[:-3] + _IY_CODA_FOLD[w[-3:]]
+    last = w[-1:]
+    if (last in _IY_BARE_FOLD and len(w) > 1
+            and w[-2:-1] not in _U_ALL
+            and _IY_BARE_KEEP_ONSET.get(last) != w[0]):
+        return w[:-1] + _IY_BARE_FOLD[last]
+    return w
+
+
 @functools.lru_cache(maxsize=1 << 18)
 def _norm_key(s):
-    """Lowercase, collapse whitespace and normalize Vietnamese tone mark
-    placement (``uy/oe/oa``) to the new-style second-vowel form.
+    """Lowercase, collapse whitespace and normalize Vietnamese spelling
+    variants to a canonical form: tone mark placement to the new-style
+    second-vowel form, and nucleus ``y`` to ``i`` where an i-variant is
+    accepted (see :func:`_iy_fold_word`).
 
     The result is the shared search key: the query and every candidate are
-    run through the same fold, so ``huỷ diệt`` matches ``hủy diệt``.
+    run through the same fold.
 
     Pure-ASCII keys (the English reference is 100% ASCII) take a C-level
     ``str.translate`` + ``split/join`` path; Vietnamese keys keep the tone
-    regex. Edge whitespace is trimmed by ``split/join`` (queries are always
+    regex plus a per-syllable i/y fold. Every foldable shape contains a
+    toned y, so strings without one skip the fold via a single C-level scan.
+    Edge whitespace is trimmed by ``split/join`` (queries are always
     stripped first, so substring matching is unaffected).
     """
     if s.isascii():
         return " ".join(s.translate(_TRANSLATE).split())
     s = _VN_RE.sub(_vn_fix, s.lower())
+    if _YTONED_RE.search(s):
+        return " ".join(_iy_fold_word(w) for w in s.split())
     return " ".join(s.split())
 
 
