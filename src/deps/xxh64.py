@@ -21,10 +21,14 @@ if _xx is not None:
 
     def xxh64(data, seed=0):
         """Return the xxh64 digest of ``data`` (bytes or str) as an int."""
+        if isinstance(data, str):
+            data = data.encode("utf-8")
         return _xx.xxh64(data, seed=seed).intdigest()
 
     def digest(data):
         """Return a fast 64-bit digest of ``data`` (compiled xxh64)."""
+        if isinstance(data, str):
+            data = data.encode("utf-8")
         return _xx.xxh64(data).intdigest()
 
 else:
@@ -33,4 +37,6 @@ else:
     def digest(data):
         # stdlib sha256 (C) is the safe bulk-hash fallback; the pure xxh64 is
         # only suitable for short strings (data.i path lookups).
+        if isinstance(data, str):
+            data = data.encode("utf-8")
         return int.from_bytes(hashlib.sha256(data).digest()[:8], "little")

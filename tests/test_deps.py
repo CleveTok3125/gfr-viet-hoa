@@ -138,6 +138,13 @@ class Xxh64BackendTest(unittest.TestCase):
         blob = os.urandom(1 << 16)
         self.assertEqual(digest(blob), self.sel(blob))
 
+    def test_digest_accepts_str(self):
+        from deps.xxh64 import digest
+        for s in ("", "abc", "system/table/text/en/text.msg"):
+            with self.subTest(s=s):
+                self.assertEqual(digest(s), digest(s.encode("utf-8")))
+                self.assertEqual(digest(s), self.sel(s))
+
 
 class Lz4BlockBackendTest(unittest.TestCase):
     def setUp(self):
